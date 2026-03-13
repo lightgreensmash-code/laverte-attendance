@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>La Verte学院 勤怠アプリ</title>
+  <style>
+    :root {
+      --bg: #eef1f7;
+      --panel: #f8f9fc;
+      --line: #c8d2e6;
+      --ink: #1c2a44;
+      --subtle: #5c6b87;
+      --accent: #2f57d1;
+      --accent-dark: #1f3f9c;
+      --soft: #dfe7fb;
+      --danger: #bf4d4d;
+      --shadow: 0 16px 34px rgba(24, 43, 94, 0.10);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(47, 87, 209, 0.14), transparent 28%),
+        linear-gradient(180deg, #f3f6fb 0%, #e8edf6 100%);
+      min-height: 100vh;
+    }
+
+    .app {
+      width: min(1080px, calc(100% - 24px));
+      margin: 20px auto 40px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(201, 212, 234, 0.9);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      padding: 24px;
+      margin-bottom: 18px;
+      background: linear-gradient(90deg, #27439b 0%, #2f57d1 100%);
+      color: #fff;
+    }
+
+    .hero h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.8rem, 3vw, 2.8rem);
+    }
+
+    .hero p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.82);
+      line-height: 1.7;
+    }
+
+    .screen {
+      display: none;
+    }
+
+    .screen.active {
+      display: block;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .panel {
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0 0 12px;
+    }
+
+    .button-row,
+    .top-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .plain-actions {
+      margin: 12px 0 0;
+    }
+
+    .plain-actions button {
+      margin-bottom: 24px;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+    }
+
+    button.secondary {
+      background: var(--soft);
+      color: var(--accent-dark);
+    }
+
+    button.secondary:hover {
+      background: #cfdafb;
+    }
+
+    button.danger {
+      background: #f8d8d8;
+      color: var(--danger);
+    }
+
+    button.danger:hover {
+      background: #f3c5c5;
+    }
+
+    .gateway button {
+      min-width: 220px;
+      min-height: 120px;
+      font-size: 1.15rem;
+      border-radius: 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      font-size: 0.9rem;
+      color: var(--subtle);
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--ink);
+    }
+
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-6 { grid-column: span 6; }
+    .span-12 { grid-column: span 12; }
+
+    .clock-panel {
+      text-align: center;
+      padding: 24px 18px;
+    }
+
+    .clock-name {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .clock-status {
+      color: var(--subtle);
+      margin-bottom: 18px;
+    }
+
+    .time-readout {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      margin: 8px 0 18px;
+      letter-spacing: 0.03em;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .card {
+      padding: 16px;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+      border: 1px solid #d6def0;
+    }
+
+    .card-label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--subtle);
+      margin-bottom: 6px;
+    }
+
+    .card-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .list-item {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid #d8e0f1;
+      background: #ffffff;
+    }
+
+    .list-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .list-meta {
+      color: var(--subtle);
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    .list-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .action-button {
+      padding: 8px 14px;
+      font-size: 0.9rem;
+    }
+
+    .today-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .today-item {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 18px 20px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #eef3ff 100%);
+      border: 1px solid #d6def0;
+      align-items: center;
+    }
+
+    .today-cell-label {
+      display: block;
+      font-size: 0.9rem;
+      color: var(--subtle);
+      margin-bottom: 6px;
+    }
+
+    .today-cell-value {
+      display: block;
+      font-size: 1.7rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .empty {
+      color: var(--subtle);
+      padding: 10px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid #dde4f3;
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 0.88rem;
+      color: var(--accent-dark);
+      background: #edf2ff;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    .muted {
+      color: var(--subtle);
+      font-size: 0.92rem;
+    }
+
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .menu-card {
+      text-align: center;
+      border-radius: 20px;
+      padding: 18px;
+      min-height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .menu-card strong {
+      display: block;
+      font-size: 1.05rem;
+    }
+
+    .auth-panel {
+      max-width: 520px;
+      margin: 0 auto;
+    }
+
+    .screen.active .auth-panel:first-child {
+      margin-top: 8px;
+    }
+
+    .auth-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: var(--accent);
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: 0;
+      padding: 0;
+      font: inherit;
+    }
+
+    @media (max-width: 860px) {
+      .span-3,
+      .span-4,
+      .span-6 {
+        grid-column: span 12;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .gateway button {
+        width: 100%;
+      }
+
+      .menu-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .today-item {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <h1>La Verte学院 勤怠アプリ</h1>
+      <p>スタッフは出勤と退勤だけ、管理者は登録情報と勤務時間の確認だけに絞ったシンプルな勤怠管理です。</p>
+    </section>
+
+    <section id="homeScreen" class="screen active">
+      <div class="panel gateway">
+        <h2>利用メニュー</h2>
+        <div class="button-row">
+          <button id="openStaffScreen" type="button">スタッフ用</button>
+          <button id="openAdminScreen" type="button">管理者用</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="staffScreen" class="screen">
+      <div class="top-actions plain-actions">
+        <button class="secondary back-home" type="button">最初の画面に戻る</button>
+      </div>
+
+      <div class="panel">
+        <h2>スタッフ打刻</h2>
+        <div class="grid">
+          <div class="field span-6">
+            <label for="staffSelect">スタッフ名</label>
+            <select id="staffSelect"></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel clock-panel">
+        <div id="selectedStaffName" class="clock-name">スタッフを選択してください</div>
+        <div id="attendanceStatus" class="clock-status">未選択</div>
+        <div id="liveClock" class="time-readout">00:00:00</div>
+        <div class="button-row" style="justify-content:center;">
+          <button id="clockInBtn" type="button">出勤</button>
+          <button id="clockOutBtn" class="secondary" type="button">退勤</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>選択中スタッフの履歴</h3>
+        <div id="staffHistory" class="list"></div>
+      </div>
+
+      <div class="panel">
+        <h3 id="staffPastHistoryTitle">過去の〇〇さんの出退勤履歴</h3>
+        <div id="staffPastHistory" class="list"></div>
+      </div>
+    </section>
+
+    <section id="adminLoginScreen" class="screen">
+      <div class="top-actions plain-actions auth-panel">
+        <button class="secondary back-home" type="button">最初の画面に戻る</button>
+      </div>
+
+      <div class="panel auth-panel">
+        <h2>管理者ログイン</h2>
+        <div class="grid">
+          <div class="field span-12">
+            <label for="adminPasswordInput">パスワード</label>
+            <input id="adminPasswordInput" type="password" placeholder="パスワードを入力">
+          </div>
+          <div class="span-12">
+            <div class="button-row">
+              <button id="adminLoginBtn" type="button">ログイン</button>
+            </div>
+            <button id="openPasswordResetScreen" class="auth-link" type="button">パスワードを忘れた場合</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="adminScreen" class="screen">
+      <div class="top-actions plain-actions">
+        <button class="secondary back-home" type="button">最初の画面に戻る</button>
+      </div>
+
+      <div class="panel">
+        <h2>勤務時間一覧</h2>
+        <div class="cards">
+          <div class="card">
+            <span class="card-label">登録スタッフ数</span>
+            <div id="totalStaffCount" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <span class="card-label">総勤務時間</span>
+            <div id="grandTotalHours" class="card-value">0.0時間</div>
+          </div>
+          <div class="card">
+            <span class="card-label">本日出勤中</span>
+            <div id="workingNowCount" class="card-value">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>スタッフ別の累計勤務時間</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>氏名</th>
+                <th>累計勤務時間</th>
+                <th>現在の状態</th>
+              </tr>
+            </thead>
+            <tbody id="adminSummaryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>本日の出勤者</h3>
+        <div id="todayAttendees" class="today-list"></div>
+      </div>
+
+      <div class="panel">
+        <h3>登録メニュー</h3>
+        <div class="menu-grid">
+          <button id="openStaffRegisterScreen" class="menu-card" type="button">
+            <strong>スタッフ登録</strong>
+          </button>
+          <button id="openAdminRegisterScreen" class="menu-card" type="button">
+            <strong>管理者登録</strong>
+          </button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>登録済みスタッフ</h3>
+        <div id="staffRegistry" class="list"></div>
+      </div>
+
+      <div class="panel">
+        <h3>登録済み管理者</h3>
+        <div id="adminRegistry" class="list"></div>
+      </div>
+    </section>
+
+    <section id="passwordResetScreen" class="screen">
+      <div class="top-actions plain-actions auth-panel">
+        <button class="secondary back-admin-login" type="button">ログイン画面に戻る</button>
+      </div>
+
+      <div class="panel auth-panel">
+        <h2>パスワード変更</h2>
+        <div class="grid">
+          <div class="field span-12">
+            <label for="resetNameInput">氏名</label>
+            <input id="resetNameInput" type="text" placeholder="例: 田中 一郎">
+          </div>
+          <div class="field span-12">
+            <label for="resetPhoneInput">電話番号</label>
+            <input id="resetPhoneInput" type="text" placeholder="例: 090-0000-0000">
+          </div>
+          <div class="field span-12">
+            <label for="resetNewPasswordInput">新しいパスワード</label>
+            <input id="resetNewPasswordInput" type="password" placeholder="新しいパスワードを入力">
+          </div>
+          <div class="span-12">
+            <div class="button-row">
+              <button id="changePasswordBtn" type="button">変更</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="staffRegisterScreen" class="screen">
+      <div class="top-actions plain-actions">
+        <button class="secondary back-admin" type="button">管理者画面に戻る</button>
+      </div>
+
+      <div class="panel">
+        <h2>スタッフ登録</h2>
+        <div class="grid">
+          <div class="field span-3">
+            <label for="staffNameInput">氏名</label>
+            <input id="staffNameInput" type="text" placeholder="例: 山田 花子">
+          </div>
+          <div class="field span-3">
+            <label for="staffKanaInput">氏名（かな）</label>
+            <input id="staffKanaInput" type="text" placeholder="例: やまだ はなこ">
+          </div>
+          <div class="field span-3">
+            <label for="staffAddressInput">住所</label>
+            <input id="staffAddressInput" type="text" placeholder="例: 東京都新宿区...">
+          </div>
+          <div class="field span-3">
+            <label for="staffPhoneInput">電話番号</label>
+            <input id="staffPhoneInput" type="text" placeholder="例: 090-1234-5678">
+          </div>
+          <div class="field span-3">
+            <label for="staffEmailInput">メール</label>
+            <input id="staffEmailInput" type="email" placeholder="例: sample@example.com">
+          </div>
+          <div class="span-12">
+            <div class="button-row">
+              <button id="registerStaffBtn" type="button">スタッフを登録</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="adminRegisterScreen" class="screen">
+      <div class="top-actions plain-actions">
+        <button class="secondary back-admin" type="button">管理者画面に戻る</button>
+      </div>
+
+      <div class="panel">
+        <h2>管理者登録</h2>
+        <div class="grid">
+          <div class="field span-3">
+            <label for="adminNameInput">氏名</label>
+            <input id="adminNameInput" type="text" placeholder="例: 田中 一郎">
+          </div>
+          <div class="field span-3">
+            <label for="adminAddressInput">住所</label>
+            <input id="adminAddressInput" type="text" placeholder="例: 東京都渋谷区...">
+          </div>
+          <div class="field span-3">
+            <label for="adminPhoneInput">電話番号</label>
+            <input id="adminPhoneInput" type="text" placeholder="例: 090-0000-0000">
+          </div>
+          <div class="field span-3">
+            <label for="adminEmailInput">メールアドレス</label>
+            <input id="adminEmailInput" type="email" placeholder="例: admin@example.com">
+          </div>
+          <div class="span-12">
+            <div class="button-row">
+              <button id="registerAdminBtn" type="button">管理者を登録</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "la-verte-simple-attendance";
+
+    const homeScreen = document.getElementById("homeScreen");
+    const heroDescription = document.querySelector(".hero p");
+    const heroTitle = document.querySelector(".hero h1");
+    const staffScreen = document.getElementById("staffScreen");
+    const staffScreenTitle = document.querySelector("#staffScreen .panel h2");
+    const adminLoginScreen = document.getElementById("adminLoginScreen");
+    const adminScreen = document.getElementById("adminScreen");
+    const passwordResetScreen = document.getElementById("passwordResetScreen");
+    const staffRegisterScreen = document.getElementById("staffRegisterScreen");
+    const adminRegisterScreen = document.getElementById("adminRegisterScreen");
+    const staffSelect = document.getElementById("staffSelect");
+    const selectedStaffName = document.getElementById("selectedStaffName");
+    const attendanceStatus = document.getElementById("attendanceStatus");
+    const liveClock = document.getElementById("liveClock");
+    const staffDetailPanel = selectedStaffName.closest(".panel");
+    const staffHistoryTitle = document.querySelector("#staffHistory").previousElementSibling;
+    const staffHistory = document.getElementById("staffHistory");
+    const staffHistoryPanel = staffHistory.closest(".panel");
+    const staffPastHistoryTitle = document.getElementById("staffPastHistoryTitle");
+    const staffPastHistory = document.getElementById("staffPastHistory");
+    const staffPastHistoryPanel = staffPastHistory.closest(".panel");
+    const adminSummaryBody = document.getElementById("adminSummaryBody");
+    const totalStaffCount = document.getElementById("totalStaffCount");
+    const grandTotalHours = document.getElementById("grandTotalHours");
+    const workingNowCount = document.getElementById("workingNowCount");
+    const staffRegistry = document.getElementById("staffRegistry");
+    const adminRegistry = document.getElementById("adminRegistry");
+    const todayAttendees = document.getElementById("todayAttendees");
+
+    const staffNameInput = document.getElementById("staffNameInput");
+    const staffKanaInput = document.getElementById("staffKanaInput");
+    const staffAddressInput = document.getElementById("staffAddressInput");
+    const staffPhoneInput = document.getElementById("staffPhoneInput");
+    const staffEmailInput = document.getElementById("staffEmailInput");
+    const adminNameInput = document.getElementById("adminNameInput");
+    const adminAddressInput = document.getElementById("adminAddressInput");
+    const adminPhoneInput = document.getElementById("adminPhoneInput");
+    const adminEmailInput = document.getElementById("adminEmailInput");
+    const adminPasswordInput = document.getElementById("adminPasswordInput");
+    const resetNameInput = document.getElementById("resetNameInput");
+    const resetPhoneInput = document.getElementById("resetPhoneInput");
+    const resetNewPasswordInput = document.getElementById("resetNewPasswordInput");
+
+    const state = {
+      staff: [],
+      admins: [],
+      adminPassword: "1000",
+      sessions: []
+    };
+
+    let editingStaffId = null;
+    let editingAdminId = null;
+    let timerId = null;
+
+    function generateId() {
+      return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        state.staff = Array.isArray(parsed.staff) ? parsed.staff : [];
+        state.admins = Array.isArray(parsed.admins) ? parsed.admins : [];
+        state.adminPassword = typeof parsed.adminPassword === "string" && parsed.adminPassword ? parsed.adminPassword : "1000";
+        state.sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+      } catch {
+        state.staff = [];
+        state.admins = [];
+        state.adminPassword = "1000";
+        state.sessions = [];
+      }
+    }
+
+    function showScreen(screen) {
+      [homeScreen, staffScreen, adminLoginScreen, adminScreen, passwordResetScreen, staffRegisterScreen, adminRegisterScreen].forEach((el) => el.classList.remove("active"));
+      screen.classList.add("active");
+    }
+
+    function formatDateTime(value) {
+      if (!value) return "-";
+      return new Date(value).toLocaleString("ja-JP", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function formatDuration(ms) {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+      const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+      const seconds = String(totalSeconds % 60).padStart(2, "0");
+      return `${hours}:${minutes}:${seconds}`;
+    }
+
+    function totalHoursForStaff(staffId) {
+      return state.sessions
+        .filter((session) => session.staffId === staffId)
+        .reduce((sum, session) => {
+          if (!session.clockOutAt) return sum;
+          return sum + (new Date(session.clockOutAt) - new Date(session.clockInAt));
+        }, 0);
+    }
+
+    function activeSessionForStaff(staffId) {
+      return state.sessions.find((session) => session.staffId === staffId && !session.clockOutAt) || null;
+    }
+
+    function refreshStaffSelect() {
+      const current = staffSelect.value;
+      staffSelect.innerHTML = "";
+
+      if (!state.staff.length) {
+        const option = document.createElement("option");
+        option.textContent = "先に管理者画面でスタッフ登録してください";
+        option.value = "";
+        staffSelect.appendChild(option);
+        staffSelect.disabled = true;
+      } else {
+        staffSelect.disabled = false;
+        const placeholder = document.createElement("option");
+        placeholder.textContent = "スタッフを選択";
+        placeholder.value = "";
+        staffSelect.appendChild(placeholder);
+
+        state.staff.forEach((member) => {
+          const option = document.createElement("option");
+          option.value = member.id;
+          option.textContent = member.name;
+          staffSelect.appendChild(option);
+        });
+
+        if (state.staff.some((member) => member.id === current)) {
+          staffSelect.value = current;
+        }
+      }
+    }
+
+    function renderStaffHistory() {
+      const staffId = staffSelect.value;
+      staffHistory.innerHTML = "";
+
+      if (!hasSelectedStaff) {
+        staffHistory.innerHTML = '<div class="empty">スタッフを選択すると打刻履歴が表示されます。</div>';
+        return;
+      }
+
+      const history = state.sessions
+        .filter((session) => session.staffId === staffId)
+        .sort((a, b) => new Date(b.clockInAt) - new Date(a.clockInAt));
+
+      if (!history.length) {
+        staffHistory.innerHTML = '<div class="empty">まだ打刻履歴はありません。</div>';
+        return;
+      }
+
+      history.forEach((session) => {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        const duration = session.clockOutAt
+          ? formatDuration(new Date(session.clockOutAt) - new Date(session.clockInAt))
+          : "勤務中";
+        item.innerHTML = `
+          <div class="list-title">${formatDateTime(session.clockInAt)} 出勤</div>
+          <div class="list-meta">
+            退勤: ${formatDateTime(session.clockOutAt)}<br>
+            勤務時間: ${duration}
+          </div>
+        `;
+        staffHistory.appendChild(item);
+      });
+    }
+
+    function renderStaffHistory() {
+      const staffId = staffSelect.value;
+      staffHistory.innerHTML = "";
+      staffPastHistory.innerHTML = "";
+
+      if (!staffId) {
+        staffHistoryTitle.textContent = "〇〇さんの1カ月間の出退勤履歴";
+        staffPastHistoryTitle.textContent = "過去の〇〇さんの出退勤履歴";
+        staffHistory.innerHTML = '<div class="empty">スタッフを選択すると1カ月間の出退勤履歴が表示されます。</div>';
+        staffPastHistory.innerHTML = '<div class="empty">スタッフを選択すると過去月ごとの総労働時間が表示されます。</div>';
+        return;
+      }
+
+      const staff = state.staff.find((member) => member.id === staffId);
+      const staffName = staff ? staff.name : "〇〇";
+      staffHistoryTitle.textContent = `${staffName}さんの1カ月間の出退勤履歴`;
+      staffPastHistoryTitle.textContent = `過去の${staffName}さんの出退勤履歴`;
+
+      const history = state.sessions
+        .filter((session) => session.staffId === staffId)
+        .sort((a, b) => new Date(b.clockInAt) - new Date(a.clockInAt));
+
+      if (!history.length) {
+        staffHistory.innerHTML = '<div class="empty">まだ1カ月間の出退勤履歴はありません。</div>';
+        staffPastHistory.innerHTML = '<div class="empty">まだ過去の出退勤履歴はありません。</div>';
+        return;
+      }
+
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const currentMonthHistory = history.filter((session) => {
+        const date = new Date(session.clockInAt);
+        return date.getFullYear() === currentYear && date.getMonth() === currentMonth;
+      });
+
+      if (!currentMonthHistory.length) {
+        staffHistory.innerHTML = '<div class="empty">今月の出退勤履歴はまだありません。</div>';
+      }
+
+      currentMonthHistory.forEach((session) => {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        const duration = session.clockOutAt
+          ? formatDuration(new Date(session.clockOutAt) - new Date(session.clockInAt))
+          : "勤務中";
+        item.innerHTML = `
+          <div class="list-title">${formatDateTime(session.clockInAt)} 出勤</div>
+          <div class="list-meta">
+            退勤: ${formatDateTime(session.clockOutAt)}<br>
+            勤務時間: ${duration}
+          </div>
+        `;
+        staffHistory.appendChild(item);
+      });
+
+      const monthlyTotals = new Map();
+      history.forEach((session) => {
+        const date = new Date(session.clockInAt);
+        if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+          return;
+        }
+
+        const monthKey = `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, "0")}月`;
+        const workedMs = session.clockOutAt
+          ? new Date(session.clockOutAt) - new Date(session.clockInAt)
+          : 0;
+        monthlyTotals.set(monthKey, (monthlyTotals.get(monthKey) || 0) + workedMs);
+      });
+
+      if (!monthlyTotals.size) {
+        staffPastHistory.innerHTML = '<div class="empty">まだ過去の出退勤履歴はありません。</div>';
+        return;
+      }
+
+      Array.from(monthlyTotals.entries())
+        .sort((a, b) => b[0].localeCompare(a[0], "ja"))
+        .forEach(([monthKey, totalMs]) => {
+          const item = document.createElement("div");
+          item.className = "list-item";
+          item.innerHTML = `
+            <div class="list-title">${monthKey}</div>
+            <div class="list-meta">1カ月ごとの総労働時間: ${(totalMs / 3600000).toFixed(1)}時間</div>
+          `;
+          staffPastHistory.appendChild(item);
+        });
+    }
+
+    function renderStaffPanel() {
+      const staffId = staffSelect.value;
+      if (!staffId) {
+        selectedStaffName.textContent = "スタッフを選択してください";
+        attendanceStatus.textContent = state.staff.length ? "名前を選ぶと出勤・退勤できます。" : "管理者画面でスタッフ登録が必要です。";
+        liveClock.textContent = "00:00:00";
+        renderStaffHistory();
+        return;
+      }
+
+      const staff = state.staff.find((member) => member.id === staffId);
+      const activeSession = activeSessionForStaff(staffId);
+      selectedStaffName.textContent = staff ? staff.name : "スタッフ未選択";
+
+      if (activeSession) {
+        attendanceStatus.textContent = `出勤中: ${formatDateTime(activeSession.clockInAt)} から勤務しています。`;
+      } else {
+        const total = totalHoursForStaff(staffId);
+        attendanceStatus.textContent = `現在は退勤中です。累計勤務時間は ${(total / 3600000).toFixed(1)} 時間です。`;
+      }
+
+      renderStaffHistory();
+      updateLiveClock();
+    }
+
+    function updateLiveClock() {
+      const activeSession = activeSessionForStaff(staffSelect.value);
+      liveClock.textContent = activeSession
+        ? formatDuration(Date.now() - new Date(activeSession.clockInAt).getTime())
+        : "00:00:00";
+    }
+
+    function renderAdminSummary() {
+      adminSummaryBody.innerHTML = "";
+      let grandTotal = 0;
+      let workingCount = 0;
+
+      if (!state.staff.length) {
+        adminSummaryBody.innerHTML = '<tr><td colspan="3" class="muted">まだスタッフが登録されていません。</td></tr>';
+      } else {
+        state.staff.forEach((member) => {
+          const totalMs = totalHoursForStaff(member.id);
+          const active = activeSessionForStaff(member.id);
+          grandTotal += totalMs;
+          if (active) workingCount += 1;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${member.name}</td>
+            <td>${(totalMs / 3600000).toFixed(1)}時間</td>
+            <td>${active ? "出勤中" : "退勤中"}</td>
+          `;
+          adminSummaryBody.appendChild(tr);
+        });
+      }
+
+      totalStaffCount.textContent = String(state.staff.length);
+      grandTotalHours.textContent = `${(grandTotal / 3600000).toFixed(1)}時間`;
+      workingNowCount.textContent = String(workingCount);
+    }
+
+    function renderTodayAttendees() {
+      todayAttendees.innerHTML = "";
+      const today = new Date();
+      const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const latestByStaff = new Map();
+
+      state.sessions.forEach((session) => {
+        const clockIn = new Date(session.clockInAt);
+        const key = `${clockIn.getFullYear()}-${String(clockIn.getMonth() + 1).padStart(2, "0")}-${String(clockIn.getDate()).padStart(2, "0")}`;
+        if (key !== todayKey) return;
+
+        const current = latestByStaff.get(session.staffId);
+        if (!current || new Date(session.clockInAt) > new Date(current.clockInAt)) {
+          latestByStaff.set(session.staffId, session);
+        }
+      });
+
+      if (!latestByStaff.size) {
+        todayAttendees.innerHTML = '<div class="empty">本日の出勤者はまだいません。</div>';
+        return;
+      }
+
+      Array.from(latestByStaff.values())
+        .sort((a, b) => new Date(a.clockInAt) - new Date(b.clockInAt))
+        .forEach((session) => {
+          const member = state.staff.find((staff) => staff.id === session.staffId);
+          if (!member) return;
+
+          const item = document.createElement("div");
+          item.className = "today-item";
+          item.innerHTML = `
+            <div>
+              <span class="today-cell-label">出勤者名</span>
+              <span class="today-cell-value">${member.name}</span>
+            </div>
+            <div>
+              <span class="today-cell-label">出勤時間</span>
+              <span class="today-cell-value">${formatDateTime(session.clockInAt)}</span>
+            </div>
+            <div>
+              <span class="today-cell-label">現在の状態</span>
+              <span class="today-cell-value">${session.clockOutAt ? "退勤済み" : "出勤中"}</span>
+            </div>
+          `;
+          todayAttendees.appendChild(item);
+        });
+    }
+
+    function renderRegistry() {
+      staffRegistry.innerHTML = "";
+      if (!state.staff.length) {
+        staffRegistry.innerHTML = '<div class="empty">登録済みスタッフはまだいません。</div>';
+        return;
+      }
+
+      state.staff.forEach((member) => {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        item.innerHTML = `
+          <div class="list-title">${member.name}</div>
+          <div class="list-meta">
+            氏名（かな）: ${member.kana || "-"}<br>
+            住所: ${member.address}<br>
+            電話番号: ${member.phone}<br>
+            メール: ${member.email}
+          </div>
+          <div class="list-actions">
+            <button class="secondary action-button" type="button" data-edit-staff="${member.id}">編集</button>
+            <button class="danger action-button" type="button" data-delete-staff="${member.id}">削除</button>
+          </div>
+        `;
+        staffRegistry.appendChild(item);
+      });
+
+      staffRegistry.querySelectorAll("[data-edit-staff]").forEach((button) => {
+        button.addEventListener("click", () => startEditStaff(button.dataset.editStaff));
+      });
+
+      staffRegistry.querySelectorAll("[data-delete-staff]").forEach((button) => {
+        button.addEventListener("click", () => deleteStaff(button.dataset.deleteStaff));
+      });
+    }
+
+    function renderAdminRegistry() {
+      adminRegistry.innerHTML = "";
+      if (!state.admins.length) {
+        adminRegistry.innerHTML = '<div class="empty">登録済み管理者はまだいません。</div>';
+        return;
+      }
+
+      state.admins.forEach((member) => {
+        const item = document.createElement("div");
+        item.className = "list-item";
+        item.innerHTML = `
+          <div class="list-title">${member.name}</div>
+          <div class="list-meta">
+            住所: ${member.address}<br>
+            電話番号: ${member.phone}<br>
+            メールアドレス: ${member.email}
+          </div>
+          <div class="list-actions">
+            <button class="secondary action-button" type="button" data-edit-admin="${member.id}">編集</button>
+            <button class="danger action-button" type="button" data-delete-admin="${member.id}">削除</button>
+          </div>
+        `;
+        adminRegistry.appendChild(item);
+      });
+
+      adminRegistry.querySelectorAll("[data-edit-admin]").forEach((button) => {
+        button.addEventListener("click", () => startEditAdmin(button.dataset.editAdmin));
+      });
+
+      adminRegistry.querySelectorAll("[data-delete-admin]").forEach((button) => {
+        button.addEventListener("click", () => deleteAdmin(button.dataset.deleteAdmin));
+      });
+    }
+
+    function resetStaffForm() {
+      editingStaffId = null;
+      staffNameInput.value = "";
+      staffKanaInput.value = "";
+      staffAddressInput.value = "";
+      staffPhoneInput.value = "";
+      staffEmailInput.value = "";
+      document.getElementById("registerStaffBtn").textContent = "スタッフを登録";
+    }
+
+    function resetAdminForm() {
+      editingAdminId = null;
+      adminNameInput.value = "";
+      adminAddressInput.value = "";
+      adminPhoneInput.value = "";
+      adminEmailInput.value = "";
+      document.getElementById("registerAdminBtn").textContent = "管理者を登録";
+    }
+
+    function resetAdminLoginForm() {
+      adminPasswordInput.value = "";
+    }
+
+    function resetPasswordResetForm() {
+      resetNameInput.value = "";
+      resetPhoneInput.value = "";
+      resetNewPasswordInput.value = "";
+    }
+
+    function startEditStaff(staffId) {
+      const member = state.staff.find((staff) => staff.id === staffId);
+      if (!member) return;
+      editingStaffId = staffId;
+      staffNameInput.value = member.name;
+      staffKanaInput.value = member.kana || "";
+      staffAddressInput.value = member.address;
+      staffPhoneInput.value = member.phone;
+      staffEmailInput.value = member.email;
+      document.getElementById("registerStaffBtn").textContent = "スタッフ情報を更新";
+      showScreen(staffRegisterScreen);
+    }
+
+    function startEditAdmin(adminId) {
+      const member = state.admins.find((admin) => admin.id === adminId);
+      if (!member) return;
+      editingAdminId = adminId;
+      adminNameInput.value = member.name;
+      adminAddressInput.value = member.address;
+      adminPhoneInput.value = member.phone;
+      adminEmailInput.value = member.email;
+      document.getElementById("registerAdminBtn").textContent = "管理者情報を更新";
+      showScreen(adminRegisterScreen);
+    }
+
+    function loginAdmin() {
+      const password = adminPasswordInput.value;
+      if (!password) {
+        window.alert("パスワードを入力してください。");
+        return;
+      }
+
+      if (password !== state.adminPassword) {
+        window.alert("パスワードが違います。");
+        return;
+      }
+
+      resetAdminLoginForm();
+      showScreen(adminScreen);
+      refreshAll();
+    }
+
+    function changeAdminPassword() {
+      const name = resetNameInput.value.trim();
+      const phone = resetPhoneInput.value.trim();
+      const newPassword = resetNewPasswordInput.value.trim();
+
+      if (!name || !phone || !newPassword) {
+        window.alert("氏名、電話番号、新しいパスワードを入力してください。");
+        return;
+      }
+
+      const matchedAdmin = state.admins.find((admin) => admin.name === name && admin.phone === phone);
+      if (!matchedAdmin) {
+        window.alert("一致する管理者情報が見つかりませんでした。");
+        return;
+      }
+
+      state.adminPassword = newPassword;
+      saveState();
+      resetPasswordResetForm();
+      window.alert("パスワードを変更しました。");
+      showScreen(adminLoginScreen);
+    }
+
+    function deleteStaff(staffId) {
+      state.staff = state.staff.filter((member) => member.id !== staffId);
+      state.sessions = state.sessions.filter((session) => session.staffId !== staffId);
+      if (editingStaffId === staffId) {
+        resetStaffForm();
+      }
+      if (staffSelect.value === staffId) {
+        staffSelect.value = "";
+      }
+      saveState();
+      refreshAll();
+    }
+
+    function deleteAdmin(adminId) {
+      state.admins = state.admins.filter((member) => member.id !== adminId);
+      if (editingAdminId === adminId) {
+        resetAdminForm();
+      }
+      saveState();
+      refreshAll();
+    }
+
+    function registerStaff() {
+      const name = staffNameInput.value.trim();
+      const kana = staffKanaInput.value.trim();
+      const address = staffAddressInput.value.trim();
+      const phone = staffPhoneInput.value.trim();
+      const email = staffEmailInput.value.trim();
+
+      if (!name) {
+        window.alert("氏名を入力してください。");
+        return;
+      }
+
+      if (editingStaffId) {
+        const target = state.staff.find((member) => member.id === editingStaffId);
+        if (target) {
+          target.name = name;
+          target.kana = kana;
+          target.address = address;
+          target.phone = phone;
+          target.email = email;
+        }
+      } else {
+        state.staff.push({
+          id: generateId(),
+          name,
+          kana,
+          address,
+          phone,
+          email
+        });
+      }
+
+      resetStaffForm();
+      saveState();
+      refreshAll();
+      showScreen(adminScreen);
+    }
+
+    function registerAdmin() {
+      const name = adminNameInput.value.trim();
+      const address = adminAddressInput.value.trim();
+      const phone = adminPhoneInput.value.trim();
+      const email = adminEmailInput.value.trim();
+
+      if (!name || !address || !phone || !email) {
+        window.alert("氏名、住所、電話番号、メールアドレスをすべて入力してください。");
+        return;
+      }
+
+      if (editingAdminId) {
+        const target = state.admins.find((member) => member.id === editingAdminId);
+        if (target) {
+          target.name = name;
+          target.address = address;
+          target.phone = phone;
+          target.email = email;
+        }
+      } else {
+        state.admins.push({
+          id: generateId(),
+          name,
+          address,
+          phone,
+          email
+        });
+      }
+
+      resetAdminForm();
+      saveState();
+      refreshAll();
+      showScreen(adminScreen);
+    }
+
+    function clockIn() {
+      const staffId = staffSelect.value;
+      if (!staffId) {
+        window.alert("スタッフを選択してください。");
+        return;
+      }
+
+      if (activeSessionForStaff(staffId)) {
+        window.alert("このスタッフはすでに出勤中です。");
+        return;
+      }
+
+      state.sessions.push({
+        id: generateId(),
+        staffId,
+        clockInAt: new Date().toISOString(),
+        clockOutAt: null
+      });
+
+      saveState();
+      refreshAll();
+    }
+
+    function clockOut() {
+      const staffId = staffSelect.value;
+      if (!staffId) {
+        window.alert("スタッフを選択してください。");
+        return;
+      }
+
+      const session = activeSessionForStaff(staffId);
+      if (!session) {
+        window.alert("このスタッフは現在出勤中ではありません。");
+        return;
+      }
+
+      session.clockOutAt = new Date().toISOString();
+      saveState();
+      refreshAll();
+    }
+
+    function refreshAll() {
+      refreshStaffSelect();
+      renderStaffPanel();
+      renderAdminSummary();
+      renderTodayAttendees();
+      renderRegistry();
+      renderAdminRegistry();
+    }
+
+    function renderStaffPanel() {
+      const staffId = staffSelect.value;
+      const selectedLabel = staffSelect.options[staffSelect.selectedIndex]?.textContent?.trim() || "";
+      const hasSelectedStaff = Boolean(staffId) && selectedLabel !== "スタッフを選択";
+      staffDetailPanel.style.display = hasSelectedStaff ? "" : "none";
+      staffHistoryPanel.style.display = hasSelectedStaff ? "" : "none";
+      staffPastHistoryPanel.style.display = hasSelectedStaff ? "" : "none";
+
+      if (!staffId) {
+        selectedStaffName.textContent = "スタッフを選択してください";
+        attendanceStatus.textContent = state.staff.length ? "名前を選ぶと出勤・退勤できます。" : "管理者画面でスタッフ登録が必要です。";
+        liveClock.textContent = "00:00:00";
+        renderStaffHistory();
+        return;
+      }
+
+      const staff = state.staff.find((member) => member.id === staffId);
+      const activeSession = activeSessionForStaff(staffId);
+      selectedStaffName.textContent = staff ? staff.name : "スタッフ未選択";
+
+      if (activeSession) {
+        attendanceStatus.textContent = `出勤中: ${formatDateTime(activeSession.clockInAt)} から勤務しています。`;
+      } else {
+        const total = totalHoursForStaff(staffId);
+        attendanceStatus.textContent = `現在は退勤中です。累計勤務時間は ${(total / 3600000).toFixed(1)} 時間です。`;
+      }
+
+      renderStaffHistory();
+      updateLiveClock();
+    }
+
+    document.getElementById("openStaffScreen").addEventListener("click", () => {
+      showScreen(staffScreen);
+      refreshAll();
+    });
+
+    document.getElementById("openAdminScreen").addEventListener("click", () => {
+      resetAdminLoginForm();
+      showScreen(adminLoginScreen);
+    });
+
+    document.getElementById("openStaffRegisterScreen").addEventListener("click", () => {
+      resetStaffForm();
+      showScreen(staffRegisterScreen);
+    });
+
+    document.getElementById("openAdminRegisterScreen").addEventListener("click", () => {
+      resetAdminForm();
+      showScreen(adminRegisterScreen);
+    });
+
+    document.querySelectorAll(".back-home").forEach((button) => {
+      button.addEventListener("click", () => showScreen(homeScreen));
+    });
+
+    document.querySelectorAll(".back-admin-login").forEach((button) => {
+      button.addEventListener("click", () => {
+        resetPasswordResetForm();
+        showScreen(adminLoginScreen);
+      });
+    });
+
+    document.querySelectorAll(".back-admin").forEach((button) => {
+      button.addEventListener("click", () => {
+        showScreen(adminScreen);
+        refreshAll();
+      });
+    });
+
+    document.getElementById("adminLoginBtn").addEventListener("click", loginAdmin);
+    document.getElementById("openPasswordResetScreen").addEventListener("click", () => {
+      resetPasswordResetForm();
+      showScreen(passwordResetScreen);
+    });
+    document.getElementById("changePasswordBtn").addEventListener("click", changeAdminPassword);
+    document.getElementById("registerStaffBtn").addEventListener("click", registerStaff);
+    document.getElementById("registerAdminBtn").addEventListener("click", registerAdmin);
+    document.getElementById("clockInBtn").addEventListener("click", clockIn);
+    document.getElementById("clockOutBtn").addEventListener("click", clockOut);
+    staffSelect.addEventListener("change", renderStaffPanel);
+
+    loadState();
+    if (heroTitle) {
+      heroTitle.textContent = "La Verte英語学院 勤怠管理";
+    }
+    if (heroDescription) {
+      heroDescription.remove();
+    }
+    if (staffScreenTitle) {
+      staffScreenTitle.textContent = "スタッフ";
+    }
+    refreshAll();
+
+    timerId = window.setInterval(() => {
+      updateLiveClock();
+      renderAdminSummary();
+    }, 1000);
+  </script>
+</body>
+</html>
