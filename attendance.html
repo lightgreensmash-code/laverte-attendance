@@ -325,6 +325,14 @@
       font-size: 0.92rem;
     }
 
+    .summary-highlight {
+      margin: 8px 0 18px;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent-dark);
+      line-height: 1.5;
+    }
+
     .menu-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -344,6 +352,23 @@
     .menu-card strong {
       display: block;
       font-size: 1.05rem;
+    }
+
+    .text-button {
+      background: none;
+      border: 0;
+      padding: 0;
+      color: var(--accent-dark);
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: underline;
+      border-radius: 0;
+    }
+
+    .text-button:hover {
+      background: none;
+      transform: none;
+      color: var(--accent);
     }
 
     .auth-panel {
@@ -412,6 +437,21 @@
     <section id="staffScreen" class="screen">
       <div class="top-actions plain-actions">
         <button class="secondary back-home" type="button">最初の画面に戻る</button>
+      </div>
+
+      <div class="panel">
+        <h3>アルバイト料設定</h3>
+        <div class="grid">
+          <div class="field span-3">
+            <label for="hourlyRateInput">時給</label>
+            <input id="hourlyRateInput" type="number" min="0" step="1" placeholder="例: 1200">
+          </div>
+          <div class="span-12">
+            <div class="button-row">
+              <button id="saveHourlyRateBtn" type="button">時給を保存</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="panel">
@@ -512,6 +552,33 @@
       </div>
 
       <div class="panel">
+        <h3>勤怠時間の追記</h3>
+        <div class="grid">
+          <div class="field span-3">
+            <label for="manualStaffSelect">スタッフ名</label>
+            <select id="manualStaffSelect"></select>
+          </div>
+          <div class="field span-3">
+            <label for="manualWorkDate">勤務日</label>
+            <input id="manualWorkDate" type="date">
+          </div>
+          <div class="field span-3">
+            <label for="manualClockIn">出勤時間</label>
+            <input id="manualClockIn" type="time">
+          </div>
+          <div class="field span-3">
+            <label for="manualClockOut">退勤時間</label>
+            <input id="manualClockOut" type="time">
+          </div>
+          <div class="span-12">
+            <div class="button-row">
+              <button id="saveManualAttendanceBtn" type="button">勤怠を追記</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
         <h3>登録メニュー</h3>
         <div class="menu-grid">
           <button id="openStaffRegisterScreen" class="menu-card" type="button">
@@ -531,6 +598,30 @@
       <div class="panel">
         <h3>登録済み管理者</h3>
         <div id="adminRegistry" class="list"></div>
+      </div>
+    </section>
+
+    <section id="adminStaffDetailScreen" class="screen">
+      <div class="top-actions plain-actions">
+        <button id="backToAdminSummaryBtn" class="secondary" type="button">管理者画面に戻る</button>
+      </div>
+
+      <div class="panel">
+        <h2 id="adminStaffDetailTitle">スタッフ勤務詳細</h2>
+        <p id="adminStaffDetailSubtitle" class="muted">該当月の勤務状況を表示します。</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>出勤</th>
+                <th>退勤</th>
+                <th>勤務時間</th>
+              </tr>
+            </thead>
+            <tbody id="adminStaffDetailBody"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -644,6 +735,7 @@
     const staffScreenTitle = document.querySelector("#staffScreen .panel h2");
     const adminLoginScreen = document.getElementById("adminLoginScreen");
     const adminScreen = document.getElementById("adminScreen");
+    const adminStaffDetailScreen = document.getElementById("adminStaffDetailScreen");
     const passwordResetScreen = document.getElementById("passwordResetScreen");
     const staffRegisterScreen = document.getElementById("staffRegisterScreen");
     const adminRegisterScreen = document.getElementById("adminRegisterScreen");
@@ -658,13 +750,24 @@
     const staffPastHistoryTitle = document.getElementById("staffPastHistoryTitle");
     const staffPastHistory = document.getElementById("staffPastHistory");
     const staffPastHistoryPanel = staffPastHistory.closest(".panel");
+    const adminSummaryTitle = document.querySelector("#adminSummaryBody").closest(".panel").querySelector("h3");
     const adminSummaryBody = document.getElementById("adminSummaryBody");
+    const adminScreenTitle = document.querySelector("#adminScreen .panel h2");
     const totalStaffCount = document.getElementById("totalStaffCount");
     const grandTotalHours = document.getElementById("grandTotalHours");
     const workingNowCount = document.getElementById("workingNowCount");
     const staffRegistry = document.getElementById("staffRegistry");
     const adminRegistry = document.getElementById("adminRegistry");
     const todayAttendees = document.getElementById("todayAttendees");
+    const adminStaffDetailTitle = document.getElementById("adminStaffDetailTitle");
+    const adminStaffDetailSubtitle = document.getElementById("adminStaffDetailSubtitle");
+    const adminStaffDetailBody = document.getElementById("adminStaffDetailBody");
+    const manualStaffSelect = document.getElementById("manualStaffSelect");
+    const manualWorkDate = document.getElementById("manualWorkDate");
+    const manualClockIn = document.getElementById("manualClockIn");
+    const manualClockOut = document.getElementById("manualClockOut");
+    const hourlyRateInput = document.getElementById("hourlyRateInput");
+    const hourlyRatePanel = hourlyRateInput ? hourlyRateInput.closest(".panel") : null;
 
     const staffNameInput = document.getElementById("staffNameInput");
     const staffKanaInput = document.getElementById("staffKanaInput");
@@ -684,11 +787,13 @@
       staff: [],
       admins: [],
       adminPassword: "1000",
+      hourlyRate: 0,
       sessions: []
     };
 
     let editingStaffId = null;
     let editingAdminId = null;
+    let adminDetailStaffId = null;
     let timerId = null;
 
     function generateId() {
@@ -707,17 +812,19 @@
         state.staff = Array.isArray(parsed.staff) ? parsed.staff : [];
         state.admins = Array.isArray(parsed.admins) ? parsed.admins : [];
         state.adminPassword = typeof parsed.adminPassword === "string" && parsed.adminPassword ? parsed.adminPassword : "1000";
+        state.hourlyRate = Number.isFinite(Number(parsed.hourlyRate)) ? Number(parsed.hourlyRate) : 0;
         state.sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
       } catch {
         state.staff = [];
         state.admins = [];
         state.adminPassword = "1000";
+        state.hourlyRate = 0;
         state.sessions = [];
       }
     }
 
     function showScreen(screen) {
-      [homeScreen, staffScreen, adminLoginScreen, adminScreen, passwordResetScreen, staffRegisterScreen, adminRegisterScreen].forEach((el) => el.classList.remove("active"));
+      document.querySelectorAll(".screen").forEach((el) => el.classList.remove("active"));
       screen.classList.add("active");
     }
 
@@ -741,6 +848,152 @@
       return `${hours}:${minutes}:${seconds}`;
     }
 
+    function formatHoursAndMinutes(ms) {
+      const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return `${hours}時間${minutes}分`;
+    }
+
+    function formatDateOnly(value) {
+      return new Date(value).toLocaleDateString("ja-JP", {
+        month: "numeric",
+        day: "numeric",
+        weekday: "short"
+      });
+    }
+
+    function formatTimeOnly(value) {
+      if (!value) return "-";
+      return new Date(value).toLocaleTimeString("ja-JP", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function formatTimeForMessage(value) {
+      if (!value) return "--時--分";
+      const date = new Date(value);
+      return `${String(date.getHours()).padStart(2, "0")}時${String(date.getMinutes()).padStart(2, "0")}分`;
+    }
+
+    function formatCurrency(value) {
+      return new Intl.NumberFormat("ja-JP", {
+        style: "currency",
+        currency: "JPY",
+        maximumFractionDigits: 0
+      }).format(value);
+    }
+
+    function getHourlyRateInputElement() {
+      return document.getElementById("hourlyRateAdminInput") || hourlyRateInput;
+    }
+
+    function setupHourlyRateScreen() {
+      if (hourlyRatePanel) {
+        hourlyRatePanel.style.display = "none";
+      }
+
+      const adminActions = adminScreen.querySelector(".top-actions");
+      if (adminActions && !document.getElementById("openHourlyRateScreen")) {
+        const button = document.createElement("button");
+        button.id = "openHourlyRateScreen";
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = "アルバイト料設定";
+        adminActions.appendChild(button);
+      }
+
+      if (!document.getElementById("hourlyRateScreen")) {
+        const section = document.createElement("section");
+        section.id = "hourlyRateScreen";
+        section.className = "screen";
+        section.innerHTML = `
+          <div class="top-actions plain-actions">
+            <button id="backFromHourlyRateScreen" class="secondary" type="button">管理者画面に戻る</button>
+          </div>
+          <div class="panel">
+            <h2>アルバイト料設定</h2>
+            <div class="grid">
+              <div class="field span-3">
+                <label for="hourlyRateAdminInput">時給</label>
+                <input id="hourlyRateAdminInput" type="number" min="0" step="1" placeholder="例: 1200">
+              </div>
+              <div class="span-12">
+                <div class="button-row">
+                  <button id="saveHourlyRateAdminBtn" type="button">時給を保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        document.querySelector("main.app").appendChild(section);
+      }
+
+      document.getElementById("openHourlyRateScreen")?.addEventListener("click", () => {
+        const input = getHourlyRateInputElement();
+        if (input) {
+          input.value = String(state.hourlyRate || 0);
+        }
+        showScreen(document.getElementById("hourlyRateScreen"));
+      });
+
+      document.getElementById("backFromHourlyRateScreen")?.addEventListener("click", () => {
+        showScreen(adminScreen);
+        renderAdminSummary();
+      });
+
+      document.getElementById("saveHourlyRateAdminBtn")?.addEventListener("click", saveHourlyRate);
+    }
+
+    function setupMonthlyWageCard() {
+      const cards = adminScreen.querySelector(".cards");
+      if (!cards || document.getElementById("monthlyTotalWage")) return;
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <span id="monthlyWageLabel" class="card-label">今月のアルバイト料総額</span>
+        <div id="monthlyTotalWage" class="card-value">¥0</div>
+      `;
+
+      const referenceCard = cards.children[2] || null;
+      if (referenceCard) {
+        cards.insertBefore(card, referenceCard);
+      } else {
+        cards.appendChild(card);
+      }
+    }
+
+    function updateMonthlyWageCard() {
+      setupMonthlyWageCard();
+      const label = document.getElementById("monthlyWageLabel");
+      const value = document.getElementById("monthlyTotalWage");
+      if (!label || !value) return;
+
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      let totalMonthlyWage = 0;
+
+      state.staff.forEach((member) => {
+        const totalMs = totalHoursForStaffInMonth(member.id, currentYear, currentMonth);
+        const roundedHours = Number((totalMs / 3600000).toFixed(1));
+        totalMonthlyWage += Math.round(roundedHours * state.hourlyRate);
+      });
+
+      label.textContent = `${currentMonth + 1}月のアルバイト料総額`;
+      value.textContent = formatCurrency(totalMonthlyWage);
+    }
+
+    function formatDateForInput(date = new Date()) {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function combineDateAndTime(dateValue, timeValue) {
+      return new Date(`${dateValue}T${timeValue}:00`);
+    }
+
     function totalHoursForStaff(staffId) {
       return state.sessions
         .filter((session) => session.staffId === staffId)
@@ -748,6 +1001,16 @@
           if (!session.clockOutAt) return sum;
           return sum + (new Date(session.clockOutAt) - new Date(session.clockInAt));
         }, 0);
+    }
+
+    function totalHoursForStaffInMonth(staffId, year, monthIndex) {
+      return state.sessions
+        .filter((session) => {
+          if (session.staffId !== staffId || !session.clockOutAt) return false;
+          const clockIn = new Date(session.clockInAt);
+          return clockIn.getFullYear() === year && clockIn.getMonth() === monthIndex;
+        })
+        .reduce((sum, session) => sum + (new Date(session.clockOutAt) - new Date(session.clockInAt)), 0);
     }
 
     function activeSessionForStaff(staffId) {
@@ -781,6 +1044,37 @@
         if (state.staff.some((member) => member.id === current)) {
           staffSelect.value = current;
         }
+      }
+    }
+
+    function refreshManualStaffSelect() {
+      const current = manualStaffSelect.value;
+      manualStaffSelect.innerHTML = "";
+
+      if (!state.staff.length) {
+        const option = document.createElement("option");
+        option.textContent = "先にスタッフ登録を行ってください";
+        option.value = "";
+        manualStaffSelect.appendChild(option);
+        manualStaffSelect.disabled = true;
+        return;
+      }
+
+      manualStaffSelect.disabled = false;
+      const placeholder = document.createElement("option");
+      placeholder.textContent = "スタッフを選択";
+      placeholder.value = "";
+      manualStaffSelect.appendChild(placeholder);
+
+      state.staff.forEach((member) => {
+        const option = document.createElement("option");
+        option.value = member.id;
+        option.textContent = member.name;
+        manualStaffSelect.appendChild(option);
+      });
+
+      if (state.staff.some((member) => member.id === current)) {
+        manualStaffSelect.value = current;
       }
     }
 
@@ -941,6 +1235,10 @@
 
     function renderAdminSummary() {
       adminSummaryBody.innerHTML = "";
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      adminSummaryTitle.textContent = `${currentMonth + 1}月のスタッフ別の累計勤務時間`;
       let grandTotal = 0;
       let workingCount = 0;
 
@@ -948,14 +1246,15 @@
         adminSummaryBody.innerHTML = '<tr><td colspan="3" class="muted">まだスタッフが登録されていません。</td></tr>';
       } else {
         state.staff.forEach((member) => {
-          const totalMs = totalHoursForStaff(member.id);
+          const totalMs = totalHoursForStaffInMonth(member.id, currentYear, currentMonth);
+          const roundedHours = Number((totalMs / 3600000).toFixed(1));
           const active = activeSessionForStaff(member.id);
           grandTotal += totalMs;
           if (active) workingCount += 1;
 
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td>${member.name}</td>
+            <td><button class="text-button" type="button" data-staff-detail="${member.id}">${member.name}</button></td>
             <td>${(totalMs / 3600000).toFixed(1)}時間</td>
             <td>${active ? "出勤中" : "退勤中"}</td>
           `;
@@ -966,6 +1265,69 @@
       totalStaffCount.textContent = String(state.staff.length);
       grandTotalHours.textContent = `${(grandTotal / 3600000).toFixed(1)}時間`;
       workingNowCount.textContent = String(workingCount);
+    }
+
+    function openAdminStaffDetail(staffId, year, monthIndex) {
+      adminDetailStaffId = staffId;
+      renderAdminStaffDetail(year, monthIndex);
+      showScreen(adminStaffDetailScreen);
+    }
+
+    function renderAdminStaffDetail(year = new Date().getFullYear(), monthIndex = new Date().getMonth()) {
+      adminStaffDetailBody.innerHTML = "";
+      const member = state.staff.find((staff) => staff.id === adminDetailStaffId);
+      const monthLabel = `${monthIndex + 1}月`;
+      let totalElement = document.getElementById("adminStaffDetailTotal");
+
+      if (!totalElement) {
+        totalElement = document.createElement("p");
+        totalElement.id = "adminStaffDetailTotal";
+        totalElement.className = "summary-highlight";
+        adminStaffDetailSubtitle.insertAdjacentElement("afterend", totalElement);
+      }
+      totalElement.className = "summary-highlight";
+
+      if (!member) {
+        adminStaffDetailTitle.textContent = "スタッフ勤務詳細";
+        adminStaffDetailSubtitle.textContent = "スタッフ情報が見つかりません。";
+        totalElement.textContent = "総勤務時間: 0時間0分";
+        adminStaffDetailBody.innerHTML = '<tr><td colspan="4" class="muted">スタッフ情報が見つかりません。</td></tr>';
+        return;
+      }
+
+      adminStaffDetailTitle.textContent = `${monthLabel}の${member.name}さんの勤務詳細`;
+      adminStaffDetailSubtitle.textContent = `${monthLabel}の各勤務日について、出勤・退勤・勤務時間を表示しています。`;
+
+      const monthlySessions = state.sessions
+        .filter((session) => {
+          if (session.staffId !== adminDetailStaffId || !session.clockOutAt) return false;
+          const clockIn = new Date(session.clockInAt);
+          return clockIn.getFullYear() === year && clockIn.getMonth() === monthIndex;
+        })
+        .sort((a, b) => new Date(a.clockInAt) - new Date(b.clockInAt));
+
+      if (!monthlySessions.length) {
+        totalElement.textContent = "総勤務時間: 0時間0分";
+        adminStaffDetailBody.innerHTML = '<tr><td colspan="4" class="muted">この月の勤務記録はまだありません。</td></tr>';
+        return;
+      }
+
+      const totalWorkedMs = monthlySessions.reduce((sum, session) => {
+        return sum + (new Date(session.clockOutAt) - new Date(session.clockInAt));
+      }, 0);
+      totalElement.textContent = `総勤務時間: ${formatHoursAndMinutes(totalWorkedMs)}`;
+
+      monthlySessions.forEach((session) => {
+        const workedMs = new Date(session.clockOutAt) - new Date(session.clockInAt);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${formatDateOnly(session.clockInAt)}</td>
+          <td>${formatTimeOnly(session.clockInAt)}</td>
+          <td>${formatTimeOnly(session.clockOutAt)}</td>
+          <td>${formatHoursAndMinutes(workedMs)}</td>
+        `;
+        adminStaffDetailBody.appendChild(tr);
+      });
     }
 
     function renderTodayAttendees() {
@@ -1274,6 +1636,47 @@
       showScreen(adminScreen);
     }
 
+    function saveManualAttendance() {
+      const staffId = manualStaffSelect.value;
+      const workDate = manualWorkDate.value;
+      const clockInTime = manualClockIn.value;
+      const clockOutTime = manualClockOut.value;
+
+      if (!staffId || !workDate || !clockInTime || !clockOutTime) {
+        window.alert("スタッフ名、勤務日、出勤時間、退勤時間を入力してください。");
+        return;
+      }
+
+      const clockInAt = combineDateAndTime(workDate, clockInTime);
+      const clockOutAt = combineDateAndTime(workDate, clockOutTime);
+
+      if (Number.isNaN(clockInAt.getTime()) || Number.isNaN(clockOutAt.getTime())) {
+        window.alert("日付または時間の形式が正しくありません。");
+        return;
+      }
+
+      if (clockOutAt <= clockInAt) {
+        window.alert("退勤時間は出勤時間より後にしてください。");
+        return;
+      }
+
+      state.sessions.push({
+        id: generateId(),
+        staffId,
+        clockInAt: clockInAt.toISOString(),
+        clockOutAt: clockOutAt.toISOString()
+      });
+
+      manualWorkDate.value = formatDateForInput();
+      manualClockIn.value = "";
+      manualClockOut.value = "";
+      manualStaffSelect.value = "";
+
+      saveState();
+      refreshAll();
+      window.alert("勤怠時間を追記しました。");
+    }
+
     function clockIn() {
       const staffId = staffSelect.value;
       if (!staffId) {
@@ -1317,11 +1720,89 @@
 
     function refreshAll() {
       refreshStaffSelect();
+      refreshManualStaffSelect();
       renderStaffPanel();
       renderAdminSummary();
+      updateMonthlyWageCard();
       renderTodayAttendees();
       renderRegistry();
       renderAdminRegistry();
+    }
+
+    function saveHourlyRate() {
+      const input = getHourlyRateInputElement();
+      const nextRate = Number(input?.value || 0);
+      if (!Number.isFinite(nextRate) || nextRate < 0) {
+        window.alert("時給は0以上の数字で入力してください。");
+        return;
+      }
+
+      state.hourlyRate = nextRate;
+      saveState();
+      renderAdminSummary();
+      if (input) {
+        input.value = String(state.hourlyRate || 0);
+      }
+      window.alert("時給を保存しました。");
+    }
+
+    function saveHourlyRate() {
+      const nextRate = Number(hourlyRateInput.value || 0);
+      if (!Number.isFinite(nextRate) || nextRate < 0) {
+        window.alert("時給は0以上の数字で入力してください。");
+        return;
+      }
+
+      state.hourlyRate = nextRate;
+      saveState();
+      renderAdminSummary();
+      window.alert("時給を保存しました。");
+    }
+
+    function renderAdminSummary() {
+      const headerRow = adminSummaryBody.closest("table").querySelector("thead tr");
+      headerRow.innerHTML = `
+        <th>氏名</th>
+        <th>累計勤務時間</th>
+        <th>アルバイト料</th>
+        <th>現在の状態</th>
+      `;
+
+      adminSummaryBody.innerHTML = "";
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      adminSummaryTitle.textContent = `${currentMonth + 1}月のスタッフ別の累計勤務時間`;
+      let grandTotal = 0;
+      let workingCount = 0;
+
+      if (!state.staff.length) {
+        adminSummaryBody.innerHTML = '<tr><td colspan="4" class="muted">まだスタッフが登録されていません。</td></tr>';
+      } else {
+        state.staff.forEach((member) => {
+          const totalMs = totalHoursForStaffInMonth(member.id, currentYear, currentMonth);
+          const active = activeSessionForStaff(member.id);
+          grandTotal += totalMs;
+          if (active) workingCount += 1;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><button class="text-button" type="button" data-staff-detail="${member.id}">${member.name}</button></td>
+            <td>${(totalMs / 3600000).toFixed(1)}時間</td>
+            <td>${formatCurrency((totalMs / 3600000) * state.hourlyRate)}</td>
+            <td>${active ? "出勤中" : "退勤中"}</td>
+          `;
+          adminSummaryBody.appendChild(tr);
+        });
+      }
+
+      totalStaffCount.textContent = String(state.staff.length);
+      grandTotalHours.textContent = `${(grandTotal / 3600000).toFixed(1)}時間`;
+      workingNowCount.textContent = String(workingCount);
+      const hourlyRateField = getHourlyRateInputElement();
+      if (hourlyRateField && document.activeElement !== hourlyRateField) {
+        hourlyRateField.value = String(state.hourlyRate || 0);
+      }
     }
 
     function renderStaffPanel() {
@@ -1399,13 +1880,28 @@
       showScreen(passwordResetScreen);
     });
     document.getElementById("changePasswordBtn").addEventListener("click", changeAdminPassword);
+    document.getElementById("saveHourlyRateBtn").addEventListener("click", saveHourlyRate);
+    document.getElementById("saveManualAttendanceBtn").addEventListener("click", saveManualAttendance);
     document.getElementById("registerStaffBtn").addEventListener("click", registerStaff);
     document.getElementById("registerAdminBtn").addEventListener("click", registerAdmin);
+    adminSummaryBody.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-staff-detail]");
+      if (!button) return;
+      const now = new Date();
+      openAdminStaffDetail(button.dataset.staffDetail, now.getFullYear(), now.getMonth());
+    });
+    document.getElementById("backToAdminSummaryBtn").addEventListener("click", () => {
+      showScreen(adminScreen);
+      renderAdminSummary();
+    });
     document.getElementById("clockInBtn").addEventListener("click", clockIn);
     document.getElementById("clockOutBtn").addEventListener("click", clockOut);
     staffSelect.addEventListener("change", renderStaffPanel);
 
     loadState();
+    setupHourlyRateScreen();
+    setupMonthlyWageCard();
+    manualWorkDate.value = formatDateForInput();
     if (heroTitle) {
       heroTitle.textContent = "La Verte英語学院 勤怠管理";
     }
@@ -1417,9 +1913,180 @@
     }
     refreshAll();
 
+    saveHourlyRate = function saveHourlyRateOverride() {
+      const input = getHourlyRateInputElement();
+      const nextRate = Number(input?.value || 0);
+      if (!Number.isFinite(nextRate) || nextRate < 0) {
+        window.alert("時給は0以上の数字で入力してください。");
+        return;
+      }
+
+      state.hourlyRate = nextRate;
+      saveState();
+      renderAdminSummary();
+      const refreshedInput = getHourlyRateInputElement();
+      if (refreshedInput) {
+        refreshedInput.value = String(state.hourlyRate || 0);
+      }
+      window.alert("時給を保存しました。");
+    };
+
+    saveHourlyRate = function saveHourlyRateFinal() {
+      const input = getHourlyRateInputElement();
+      const nextRate = Number(input?.value || 0);
+      if (!Number.isFinite(nextRate) || nextRate < 0) {
+        window.alert("時給は0以上の数字で入力してください。");
+        return;
+      }
+
+      state.hourlyRate = nextRate;
+      saveState();
+      renderAdminSummary();
+      const refreshedInput = getHourlyRateInputElement();
+      if (refreshedInput) {
+        refreshedInput.value = String(state.hourlyRate || 0);
+      }
+      window.alert("時給を保存しました。");
+    };
+
+    renderAdminSummary = function renderAdminSummaryFinal() {
+      const cards = adminScreen.querySelector(".cards");
+      if (cards && !document.getElementById("monthlyTotalWage")) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <span id="monthlyWageLabel" class="card-label">今月のアルバイト料総額</span>
+          <div id="monthlyTotalWage" class="card-value">¥0</div>
+        `;
+        const referenceCard = cards.children[2] || null;
+        if (referenceCard) {
+          cards.insertBefore(card, referenceCard);
+        } else {
+          cards.appendChild(card);
+        }
+      }
+
+      const headerRow = adminSummaryBody.closest("table").querySelector("thead tr");
+      const adminCards = adminScreen.querySelectorAll(".cards .card");
+      const totalHoursLabel = adminCards[1]?.querySelector(".card-label");
+      const monthlyWageLabel = document.getElementById("monthlyWageLabel");
+      const monthlyTotalWage = document.getElementById("monthlyTotalWage");
+      headerRow.innerHTML = `
+        <th>氏名</th>
+        <th>累計勤務時間</th>
+        <th>アルバイト料</th>
+        <th>現在の状態</th>
+      `;
+
+      adminSummaryBody.innerHTML = "";
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      if (adminScreenTitle) {
+        adminScreenTitle.textContent = `${currentMonth + 1}月の勤務時間一覧`;
+      }
+      if (totalHoursLabel) {
+        totalHoursLabel.textContent = "スタッフ全体の総勤務時間";
+      }
+      adminSummaryTitle.textContent = `${currentMonth + 1}月のスタッフ別の累計勤務時間`;
+      let grandTotal = 0;
+      let workingCount = 0;
+
+      if (!state.staff.length) {
+        adminSummaryBody.innerHTML = '<tr><td colspan="4" class="muted">まだスタッフが登録されていません。</td></tr>';
+      } else {
+        state.staff.forEach((member) => {
+          const totalMs = totalHoursForStaffInMonth(member.id, currentYear, currentMonth);
+          const roundedHours = Number((totalMs / 3600000).toFixed(1));
+          const wage = Math.round(roundedHours * state.hourlyRate);
+          const active = activeSessionForStaff(member.id);
+          grandTotal += totalMs;
+          if (active) workingCount += 1;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><button class="text-button" type="button" data-staff-detail="${member.id}">${member.name}</button></td>
+            <td>${roundedHours.toFixed(1)}時間</td>
+            <td>${formatCurrency(wage)}</td>
+            <td>${active ? "出勤中" : "退勤中"}</td>
+          `;
+          adminSummaryBody.appendChild(tr);
+        });
+      }
+
+      totalStaffCount.textContent = String(state.staff.length);
+      grandTotalHours.textContent = `${(grandTotal / 3600000).toFixed(1)}時間`;
+      workingNowCount.textContent = String(workingCount);
+      const hourlyRateField = getHourlyRateInputElement();
+      if (hourlyRateField && document.activeElement !== hourlyRateField) {
+        hourlyRateField.value = String(state.hourlyRate || 0);
+      }
+    };
+
+    ["saveHourlyRateBtn", "saveHourlyRateAdminBtn"].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      const clone = button.cloneNode(true);
+      button.replaceWith(clone);
+      clone.addEventListener("click", saveHourlyRate);
+    });
+
+    renderStaffPanel = function renderStaffPanelFinal() {
+      const staffId = staffSelect.value;
+      const selectedLabel = staffSelect.options[staffSelect.selectedIndex]?.textContent?.trim() || "";
+      const hasSelectedStaff = Boolean(staffId) && selectedLabel !== "スタッフを選択";
+      staffDetailPanel.style.display = hasSelectedStaff ? "" : "none";
+      staffHistoryPanel.style.display = hasSelectedStaff ? "" : "none";
+      staffPastHistoryPanel.style.display = hasSelectedStaff ? "" : "none";
+
+      if (!staffId) {
+        selectedStaffName.textContent = "スタッフを選択してください";
+        attendanceStatus.textContent = state.staff.length ? "名前を選ぶと出勤・退勤できます。" : "管理者画面でスタッフ登録が必要です。";
+        liveClock.textContent = "00:00:00";
+        renderStaffHistory();
+        return;
+      }
+
+      const staff = state.staff.find((member) => member.id === staffId);
+      const activeSession = activeSessionForStaff(staffId);
+      selectedStaffName.textContent = staff ? staff.name : "スタッフ未選択";
+
+      if (activeSession) {
+        attendanceStatus.textContent = `出勤中: ${formatDateTime(activeSession.clockInAt)} から勤務しています。`;
+      } else {
+        const today = new Date();
+        const latestTodaySession = state.sessions
+          .filter((session) => {
+            if (session.staffId !== staffId || !session.clockOutAt) {
+              return false;
+            }
+
+            const clockOut = new Date(session.clockOutAt);
+            return clockOut.getFullYear() === today.getFullYear()
+              && clockOut.getMonth() === today.getMonth()
+              && clockOut.getDate() === today.getDate();
+          })
+          .sort((a, b) => new Date(b.clockOutAt) - new Date(a.clockOutAt))[0];
+
+        if (latestTodaySession) {
+          const workedMs = new Date(latestTodaySession.clockOutAt) - new Date(latestTodaySession.clockInAt);
+          attendanceStatus.textContent = `本日はお疲れ様でした。本日の退勤時間は${formatTimeForMessage(latestTodaySession.clockOutAt)}で、勤務時間は${formatHoursAndMinutes(workedMs)}でした。`;
+        } else {
+          const total = totalHoursForStaff(staffId);
+          attendanceStatus.textContent = `現在は退勤中です。累計勤務時間は ${(total / 3600000).toFixed(1)} 時間です。`;
+        }
+      }
+
+      renderStaffHistory();
+      updateLiveClock();
+    };
+
+    renderAdminSummary();
+
     timerId = window.setInterval(() => {
       updateLiveClock();
       renderAdminSummary();
+      updateMonthlyWageCard();
     }, 1000);
   </script>
 </body>
