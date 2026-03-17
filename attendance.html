@@ -725,6 +725,7 @@
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const STORAGE_KEY = "la-verte-simple-attendance";
 
@@ -2378,7 +2379,479 @@
       updateLiveClock();
     };
 
+    const SUPABASE_URL = "https://owamzybplfmyuzezvjto.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_r9eU_odKJH6hJKA18Z_6Gw_PqLIqua4";
+    const supabaseClient = window.supabase?.createClient
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+      : null;
+    const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+
+    function isUuid(value) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+    }
+
+    function generateUuid() {
+      return typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    }
+
+    function migrateLegacyIds(targetState) {
+      const staffIdMap = new Map();
+
+      targetState.staff = (targetState.staff || []).map((member) => {
+        const nextId = isUuid(member.id) ? member.id : generateUuid();
+        if (member.id !== nextId) {
+          staffIdMap.set(member.id, nextId);
+        }
+        return {
+          id: nextId,
+          name: member.name || "",
+          kana: member.kana || "",
+          address: member.address || "",
+          phone: member.phone || "",
+          email: member.email || ""
+        };
+      });
+
+      targetState.admins = (targetState.admins || []).map((member) => ({
+        id: isUuid(member.id) ? member.id : generateUuid(),
+        name: member.name || "",
+        address: member.address || "",
+        phone: member.phone || "",
+        email: member.email || ""
+      }));
+
+      targetState.sessions = (targetState.sessions || [])
+        .map((session) => ({
+          id: isUuid(session.id) ? session.id : generateUuid(),
+          staffId: staffIdMap.get(session.staffId) || session.staffId,
+          clockInAt: session.clockInAt,
+          clockOutAt: session.clockOutAt || null
+        }))
+        .filter((session) => targetState.staff.some((member) => member.id === session.staffId));
+    }
+
+    function cacheStateLocally() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function applyState(nextState) {
+      state.staff = Array.isArray(nextState.staff) ? nextState.staff : [];
+      state.admins = Array.isArray(nextState.admins) ? nextState.admins : [];
+      state.adminPassword = typeof nextState.adminPassword === "string" && nextState.adminPassword ? nextState.adminPassword : "1000";
+      state.hourlyRate = Number.isFinite(Number(nextState.hourlyRate)) ? Number(nextState.hourlyRate) : 0;
+      state.sessions = Array.isArray(nextState.sessions) ? nextState.sessions : [];
+    }
+
+    function isStateEmpty(targetState) {
+      return !targetState.staff.length
+        && !targetState.admins.length
+        && !targetState.sessions.length
+        && !targetState.hourlyRate;
+    }
+
+    async function loadStateFromSupabase() {
+      if (!supabaseClient) {
+        return {
+          staff: [...state.staff],
+          admins: [...state.admins],
+          adminPassword: state.adminPassword,
+          hourlyRate: state.hourlyRate,
+          sessions: [...state.sessions]
+        };
+      }
+
+      const [{ data: staffRows, error: staffError }, { data: adminRows, error: adminError }, { data: sessionRows, error: sessionError }, { data: settingRows, error: settingsError }] = await Promise.all([
+        supabaseClient.from("staff").select("*").order("created_at", { ascending: true }),
+        supabaseClient.from("admins").select("*").order("created_at", { ascending: true }),
+        supabaseClient.from("sessions").select("*").order("clock_in_at", { ascending: true }),
+        supabaseClient.from("settings").select("*").order("created_at", { ascending: true }).limit(1)
+      ]);
+
+      if (staffError || adminError || sessionError || settingsError) {
+        throw staffError || adminError || sessionError || settingsError;
+      }
+
+      return {
+        staff: (staffRows || []).map((row) => ({
+          id: row.id,
+          name: row.name || "",
+          kana: row.kana || "",
+          address: row.address || "",
+          phone: row.phone || "",
+          email: row.email || ""
+        })),
+        admins: (adminRows || []).map((row) => ({
+          id: row.id,
+          name: row.name || "",
+          address: row.address || "",
+          phone: row.phone || "",
+          email: row.email || ""
+        })),
+        adminPassword: String(settingRows?.[0]?.admin_password || state.adminPassword || "1000"),
+        hourlyRate: Number(settingRows?.[0]?.hourly_rate || 0),
+        sessions: (sessionRows || []).map((row) => ({
+          id: row.id,
+          staffId: row.staff_id,
+          clockInAt: row.clock_in_at,
+          clockOutAt: row.clock_out_at
+        }))
+      };
+    }
+
+    saveState = async function saveStateSupabase() {
+      migrateLegacyIds(state);
+      cacheStateLocally();
+
+      if (!supabaseClient) {
+        return;
+      }
+
+      const staffPayload = state.staff.map((member) => ({
+        id: member.id,
+        name: member.name || "",
+        kana: member.kana || "",
+        address: member.address || "",
+        phone: member.phone || "",
+        email: member.email || ""
+      }));
+      const adminPayload = state.admins.map((member) => ({
+        id: member.id,
+        name: member.name || "",
+        address: member.address || "",
+        phone: member.phone || "",
+        email: member.email || ""
+      }));
+      const sessionPayload = state.sessions.map((session) => ({
+        id: session.id,
+        staff_id: session.staffId,
+        clock_in_at: session.clockInAt,
+        clock_out_at: session.clockOutAt || null
+      }));
+      const settingsPayload = [{
+        id: ZERO_UUID,
+        hourly_rate: Number(state.hourlyRate || 0),
+        admin_password: state.adminPassword || "1000"
+      }];
+
+      const { error: deleteSessionsError } = await supabaseClient.from("sessions").delete().neq("id", ZERO_UUID);
+      if (deleteSessionsError) throw deleteSessionsError;
+
+      const { error: deleteAdminsError } = await supabaseClient.from("admins").delete().neq("id", ZERO_UUID);
+      if (deleteAdminsError) throw deleteAdminsError;
+
+      const { error: deleteStaffError } = await supabaseClient.from("staff").delete().neq("id", ZERO_UUID);
+      if (deleteStaffError) throw deleteStaffError;
+
+      const { error: deleteSettingsError } = await supabaseClient.from("settings").delete().neq("id", "11111111-1111-1111-1111-111111111111");
+      if (deleteSettingsError) throw deleteSettingsError;
+
+      if (staffPayload.length) {
+        const { error } = await supabaseClient.from("staff").insert(staffPayload);
+        if (error) throw error;
+      }
+
+      if (adminPayload.length) {
+        const { error } = await supabaseClient.from("admins").insert(adminPayload);
+        if (error) throw error;
+      }
+
+      const { error: settingsInsertError } = await supabaseClient.from("settings").insert(settingsPayload);
+      if (settingsInsertError) throw settingsInsertError;
+
+      if (sessionPayload.length) {
+        const { error } = await supabaseClient.from("sessions").insert(sessionPayload);
+        if (error) throw error;
+      }
+    };
+
+    loadState = async function loadStateSupabase() {
+      const nextState = await loadStateFromSupabase();
+      migrateLegacyIds(nextState);
+      applyState(nextState);
+      cacheStateLocally();
+    };
+
+    async function initializeSupabaseSync() {
+      const cachedState = {
+        staff: [...state.staff],
+        admins: [...state.admins],
+        adminPassword: state.adminPassword,
+        hourlyRate: state.hourlyRate,
+        sessions: [...state.sessions]
+      };
+
+      migrateLegacyIds(cachedState);
+
+      try {
+        const remoteState = await loadStateFromSupabase();
+        migrateLegacyIds(remoteState);
+
+        if (isStateEmpty(remoteState) && !isStateEmpty(cachedState)) {
+          applyState(cachedState);
+          await saveState();
+        } else {
+          applyState(remoteState);
+          cacheStateLocally();
+        }
+
+        refreshAll();
+      } catch (error) {
+        console.error("Supabase sync failed:", error);
+        applyState(cachedState);
+        cacheStateLocally();
+        refreshAll();
+      }
+    }
+
+    changeAdminPassword = async function changeAdminPasswordSupabase() {
+      const name = resetNameInput.value.trim();
+      const phone = resetPhoneInput.value.trim();
+      const newPassword = resetNewPasswordInput.value.trim();
+
+      if (!name || !phone || !newPassword) {
+        window.alert("氏名・電話番号・新しいパスワードを入力してください。");
+        return;
+      }
+
+      const matchedAdmin = state.admins.find((admin) => admin.name === name && admin.phone === phone);
+      if (!matchedAdmin) {
+        window.alert("一致する管理者情報が見つかりませんでした。");
+        return;
+      }
+
+      state.adminPassword = newPassword;
+      await saveState();
+      resetPasswordResetForm();
+      window.alert("パスワードを変更しました。");
+      showScreen(adminLoginScreen);
+    };
+
+    deleteStaff = async function deleteStaffSupabase(staffId) {
+      state.staff = state.staff.filter((member) => member.id !== staffId);
+      state.sessions = state.sessions.filter((session) => session.staffId !== staffId);
+      if (editingStaffId === staffId) {
+        resetStaffForm();
+      }
+      if (staffSelect.value === staffId) {
+        staffSelect.value = "";
+      }
+      await saveState();
+      refreshAll();
+    };
+
+    deleteAdmin = async function deleteAdminSupabase(adminId) {
+      state.admins = state.admins.filter((member) => member.id !== adminId);
+      if (editingAdminId === adminId) {
+        resetAdminForm();
+      }
+      await saveState();
+      refreshAll();
+    };
+
+    registerStaff = async function registerStaffSupabase() {
+      const name = staffNameInput.value.trim();
+      const kana = staffKanaInput.value.trim();
+      const address = staffAddressInput.value.trim();
+      const phone = staffPhoneInput.value.trim();
+      const email = staffEmailInput.value.trim();
+
+      if (!name) {
+        window.alert("氏名を入力してください。");
+        return;
+      }
+
+      if (editingStaffId) {
+        const target = state.staff.find((member) => member.id === editingStaffId);
+        if (target) {
+          target.name = name;
+          target.kana = kana;
+          target.address = address;
+          target.phone = phone;
+          target.email = email;
+        }
+      } else {
+        state.staff.push({
+          id: generateUuid(),
+          name,
+          kana,
+          address,
+          phone,
+          email
+        });
+      }
+
+      resetStaffForm();
+      await saveState();
+      refreshAll();
+      showScreen(adminScreen);
+    };
+
+    registerAdmin = async function registerAdminSupabase() {
+      const name = adminNameInput.value.trim();
+      const address = adminAddressInput.value.trim();
+      const phone = adminPhoneInput.value.trim();
+      const email = adminEmailInput.value.trim();
+
+      if (!name || !address || !phone || !email) {
+        window.alert("氏名、住所、電話番号、メールアドレスをすべて入力してください。");
+        return;
+      }
+
+      if (editingAdminId) {
+        const target = state.admins.find((member) => member.id === editingAdminId);
+        if (target) {
+          target.name = name;
+          target.address = address;
+          target.phone = phone;
+          target.email = email;
+        }
+      } else {
+        state.admins.push({
+          id: generateUuid(),
+          name,
+          address,
+          phone,
+          email
+        });
+      }
+
+      resetAdminForm();
+      await saveState();
+      refreshAll();
+      showScreen(adminScreen);
+    };
+
+    saveManualAttendance = async function saveManualAttendanceSupabase() {
+      const staffId = manualStaffSelect.value;
+      const workDate = manualWorkDate.value;
+      const clockInTime = manualClockIn.value;
+      const clockOutTime = manualClockOut.value;
+
+      if (!staffId || !workDate || !clockInTime || !clockOutTime) {
+        window.alert("スタッフ名、勤務日、出勤時間、退勤時間を入力してください。");
+        return;
+      }
+
+      const clockInAt = combineDateAndTime(workDate, clockInTime);
+      const clockOutAt = combineDateAndTime(workDate, clockOutTime);
+
+      if (Number.isNaN(clockInAt.getTime()) || Number.isNaN(clockOutAt.getTime())) {
+        window.alert("日付または時間の形式が正しくありません。");
+        return;
+      }
+
+      if (clockOutAt <= clockInAt) {
+        window.alert("退勤時間は出勤時間より後にしてください。");
+        return;
+      }
+
+      state.sessions.push({
+        id: generateUuid(),
+        staffId,
+        clockInAt: clockInAt.toISOString(),
+        clockOutAt: clockOutAt.toISOString()
+      });
+
+      manualWorkDate.value = formatDateForInput();
+      manualClockIn.value = "";
+      manualClockOut.value = "";
+      manualStaffSelect.value = "";
+
+      await saveState();
+      refreshAll();
+      window.alert("勤務時間を追記しました。");
+    };
+
+    clockIn = async function clockInSupabase() {
+      const staffId = staffSelect.value;
+      if (!staffId) {
+        window.alert("スタッフを選択してください。");
+        return;
+      }
+
+      if (activeSessionForStaff(staffId)) {
+        window.alert("このスタッフはすでに出勤中です。");
+        return;
+      }
+
+      state.sessions.push({
+        id: generateUuid(),
+        staffId,
+        clockInAt: new Date().toISOString(),
+        clockOutAt: null
+      });
+
+      await saveState();
+      refreshAll();
+    };
+
+    clockOut = async function clockOutSupabase() {
+      const staffId = staffSelect.value;
+      if (!staffId) {
+        window.alert("スタッフを選択してください。");
+        return;
+      }
+
+      const session = activeSessionForStaff(staffId);
+      if (!session) {
+        window.alert("このスタッフは現在出勤中ではありません。");
+        return;
+      }
+
+      session.clockOutAt = new Date().toISOString();
+      await saveState();
+      refreshAll();
+    };
+
+    saveHourlyRate = async function saveHourlyRateSupabase() {
+      const input = getHourlyRateInputElement();
+      const nextRate = Number(input?.value || 0);
+      if (!Number.isFinite(nextRate) || nextRate < 0) {
+        window.alert("時給は0以上の数字で入力してください。");
+        return;
+      }
+
+      state.hourlyRate = nextRate;
+      await saveState();
+      renderAdminSummary();
+      const refreshedInput = getHourlyRateInputElement();
+      if (refreshedInput) {
+        refreshedInput.value = String(state.hourlyRate || 0);
+      }
+      window.alert("時給を保存しました。");
+    };
+
+    generateId = generateUuid;
+
+    function rebindClickHandler(buttonId, handler) {
+      const button = document.getElementById(buttonId);
+      if (!button) return;
+      const clone = button.cloneNode(true);
+      button.replaceWith(clone);
+      clone.addEventListener("click", handler);
+    }
+
+    {
+      const clickHandlers = {
+        saveHourlyRateBtn: saveHourlyRate,
+        saveHourlyRateAdminBtn: saveHourlyRate,
+        saveManualAttendanceBtn: saveManualAttendance,
+        registerStaffBtn: registerStaff,
+        registerAdminBtn: registerAdmin,
+        changePasswordBtn: changeAdminPassword,
+        clockInBtn: clockIn,
+        clockOutBtn: clockOut
+      };
+
+      Object.entries(clickHandlers).forEach(([buttonId, handler]) => {
+        rebindClickHandler(buttonId, handler);
+      });
+    }
+
     renderAdminSummary();
+    initializeSupabaseSync();
 
     timerId = window.setInterval(() => {
       updateLiveClock();
