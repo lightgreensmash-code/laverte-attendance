@@ -2503,6 +2503,7 @@
     saveState = async function saveStateSupabase() {
       migrateLegacyIds(state);
       cacheStateLocally();
+      lastRemoteSnapshot = stateSnapshot(state);
 
       if (!supabaseClient) {
         return;
@@ -2594,6 +2595,7 @@
         } else {
           applyState(remoteState);
           cacheStateLocally();
+          lastRemoteSnapshot = stateSnapshot(state);
         }
 
         refreshAll();
@@ -2601,7 +2603,44 @@
         console.error("Supabase sync failed:", error);
         applyState(cachedState);
         cacheStateLocally();
+        lastRemoteSnapshot = stateSnapshot(state);
         refreshAll();
+      }
+    }
+
+    function stateSnapshot(targetState) {
+      return JSON.stringify({
+        staff: targetState.staff,
+        admins: targetState.admins,
+        adminPassword: targetState.adminPassword,
+        hourlyRate: targetState.hourlyRate,
+        sessions: targetState.sessions
+      });
+    }
+
+    let lastRemoteSnapshot = stateSnapshot(state);
+    let syncInFlight = false;
+
+    async function syncFromSupabaseSilently() {
+      if (!supabaseClient || syncInFlight) {
+        return;
+      }
+
+      syncInFlight = true;
+      try {
+        const remoteState = await loadStateFromSupabase();
+        migrateLegacyIds(remoteState);
+        const nextSnapshot = stateSnapshot(remoteState);
+        if (nextSnapshot !== lastRemoteSnapshot) {
+          applyState(remoteState);
+          cacheStateLocally();
+          refreshAll();
+          lastRemoteSnapshot = nextSnapshot;
+        }
+      } catch (error) {
+        console.error("Supabase silent sync failed:", error);
+      } finally {
+        syncInFlight = false;
       }
     }
 
@@ -2852,6 +2891,13 @@
 
     renderAdminSummary();
     initializeSupabaseSync();
+    window.setInterval(syncFromSupabaseSilently, 5000);
+    window.addEventListener("focus", syncFromSupabaseSilently);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        syncFromSupabaseSilently();
+      }
+    });
 
     timerId = window.setInterval(() => {
       updateLiveClock();
