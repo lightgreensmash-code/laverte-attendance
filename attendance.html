@@ -986,6 +986,302 @@
       value.textContent = formatCurrency(totalMonthlyWage);
     }
 
+    function setupDataTransferPanel() {
+      document.getElementById("dataTransferPanel")?.remove();
+
+      const adminActions = adminScreen.querySelector(".top-actions");
+      if (adminActions && !document.getElementById("openDataTransferScreen")) {
+        const button = document.createElement("button");
+        button.id = "openDataTransferScreen";
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = "データ入出力";
+        adminActions.appendChild(button);
+      }
+
+      if (!document.getElementById("dataTransferScreen")) {
+        const section = document.createElement("section");
+        section.id = "dataTransferScreen";
+        section.className = "screen";
+        section.innerHTML = `
+          <div class="top-actions plain-actions">
+            <button id="backFromDataTransferScreen" class="secondary" type="button">管理者画面に戻る</button>
+          </div>
+          <div class="panel">
+            <h2>データ入出力</h2>
+            <p class="muted">勤怠履歴はExcelで開けるCSV、登録情報を含む全体保存はJSONで扱えます。</p>
+            <div class="button-row">
+              <button id="exportAttendanceCsvBtn" type="button">勤怠CSV出力</button>
+              <button id="exportBackupJsonBtn" class="secondary" type="button">全データJSON出力</button>
+              <button id="importDataBtn" class="secondary" type="button">CSV / JSON取込</button>
+            </div>
+            <input id="importDataFileInput" type="file" accept=".csv,.json,text/csv,application/json" class="hidden">
+          </div>
+        `;
+        document.querySelector("main.app").appendChild(section);
+      }
+
+      document.getElementById("openDataTransferScreen")?.addEventListener("click", () => {
+        showScreen(document.getElementById("dataTransferScreen"));
+      });
+      document.getElementById("backFromDataTransferScreen")?.addEventListener("click", () => {
+        showScreen(adminScreen);
+        refreshAll();
+      });
+      document.getElementById("exportAttendanceCsvBtn")?.addEventListener("click", exportAttendanceCsv);
+      document.getElementById("exportBackupJsonBtn")?.addEventListener("click", exportBackupJson);
+      document.getElementById("importDataBtn")?.addEventListener("click", () => {
+        document.getElementById("importDataFileInput")?.click();
+      });
+      document.getElementById("importDataFileInput")?.addEventListener("change", handleImportDataFile);
+    }
+
+    function escapeCsvCell(value) {
+      const text = String(value ?? "");
+      if (/[",\r\n]/.test(text)) {
+        return `"${text.replace(/"/g, "\"\"")}"`;
+      }
+      return text;
+    }
+
+    function parseCsvLine(line) {
+      const values = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let index = 0; index < line.length; index += 1) {
+        const char = line[index];
+        const next = line[index + 1];
+
+        if (char === "\"") {
+          if (inQuotes && next === "\"") {
+            current += "\"";
+            index += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+
+        if (char === "," && !inQuotes) {
+          values.push(current);
+          current = "";
+          continue;
+        }
+
+        current += char;
+      }
+
+      values.push(current);
+      return values;
+    }
+
+    function downloadTextFile(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportAttendanceCsv() {
+      const rows = [[
+        "勤怠ID",
+        "スタッフID",
+        "スタッフ名",
+        "スタッフ名かな",
+        "勤務日",
+        "出勤時間",
+        "退勤時間",
+        "勤務分数",
+        "勤務時間",
+        "勤務時間表記"
+      ]];
+
+      state.sessions
+        .slice()
+        .sort((a, b) => new Date(a.clockInAt) - new Date(b.clockInAt))
+        .forEach((session) => {
+          const member = state.staff.find((staff) => staff.id === session.staffId);
+          const clockInAt = new Date(session.clockInAt);
+          const clockOutAt = session.clockOutAt ? new Date(session.clockOutAt) : null;
+          const workedMs = clockOutAt ? clockOutAt - clockInAt : 0;
+          const workedMinutes = Math.max(0, Math.floor(workedMs / 60000));
+          const workedHours = (workedMs / 3600000).toFixed(2);
+          rows.push([
+            session.id,
+            session.staffId,
+            member?.name || "",
+            member?.kana || "",
+            formatDateForInput(clockInAt),
+            formatTimeOnly(session.clockInAt),
+            clockOutAt ? formatTimeOnly(session.clockOutAt) : "",
+            workedMinutes,
+            workedHours,
+            clockOutAt ? formatHoursAndMinutes(workedMs) : "出勤中"
+          ]);
+        });
+
+      const csv = `\uFEFF${rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n")}`;
+      const fileDate = formatDateForInput().replace(/-/g, "");
+      downloadTextFile(`attendance-export-${fileDate}.csv`, csv, "text/csv;charset=utf-8;");
+    }
+
+    function exportBackupJson() {
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        version: 1,
+        state: {
+          staff: state.staff,
+          admins: state.admins,
+          adminPassword: state.adminPassword,
+          hourlyRate: state.hourlyRate,
+          sessions: state.sessions
+        }
+      };
+
+      const fileDate = formatDateForInput().replace(/-/g, "");
+      downloadTextFile(
+        `attendance-backup-${fileDate}.json`,
+        `${JSON.stringify(backup, null, 2)}\n`,
+        "application/json;charset=utf-8;"
+      );
+    }
+
+    function normalizeImportedState(importedState) {
+      return {
+        staff: Array.isArray(importedState.staff) ? importedState.staff : [],
+        admins: Array.isArray(importedState.admins) ? importedState.admins : [],
+        adminPassword: typeof importedState.adminPassword === "string" && importedState.adminPassword ? importedState.adminPassword : "1000",
+        hourlyRate: Number.isFinite(Number(importedState.hourlyRate)) ? Number(importedState.hourlyRate) : 0,
+        sessions: Array.isArray(importedState.sessions) ? importedState.sessions : []
+      };
+    }
+
+    function importBackupJson(text) {
+      const parsed = JSON.parse(text);
+      const importedState = normalizeImportedState(parsed.state || parsed);
+
+      state.staff = importedState.staff;
+      state.admins = importedState.admins;
+      state.adminPassword = importedState.adminPassword;
+      state.hourlyRate = importedState.hourlyRate;
+      state.sessions = importedState.sessions;
+      saveState();
+      refreshAll();
+      window.alert("JSONデータを取り込みました。");
+    }
+
+    function importAttendanceCsv(text) {
+      const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+      if (lines.length <= 1) {
+        throw new Error("CSVに取り込める勤怠データがありません。");
+      }
+
+      const headers = parseCsvLine(lines[0]).map((header) => header.trim());
+      const requiredHeaders = ["staffName", "workDate", "clockIn", "clockOut"];
+      if (!requiredHeaders.every((header) => headers.includes(header))) {
+        throw new Error("CSVの形式が対応していません。出力したCSVをそのまま取り込んでください。");
+      }
+
+      const existingStaffById = new Map(state.staff.map((member) => [member.id, member]));
+      const existingStaffByName = new Map(state.staff.map((member) => [member.name, member]));
+      const nextSessions = [];
+
+      lines.slice(1).forEach((line) => {
+        const cells = parseCsvLine(line);
+        const row = Object.fromEntries(headers.map((header, index) => [header, (cells[index] || "").trim()]));
+        if (!row.staffName || !row.workDate || !row.clockIn || !row.clockOut) {
+          return;
+        }
+
+        let targetStaff = row.staffId ? existingStaffById.get(row.staffId) : null;
+        if (!targetStaff) {
+          targetStaff = existingStaffByName.get(row.staffName) || null;
+        }
+
+        if (!targetStaff) {
+          targetStaff = {
+            id: row.staffId || generateId(),
+            name: row.staffName,
+            kana: row.staffKana || "",
+            address: "",
+            phone: "",
+            email: ""
+          };
+          state.staff.push(targetStaff);
+          existingStaffById.set(targetStaff.id, targetStaff);
+          existingStaffByName.set(targetStaff.name, targetStaff);
+        } else if (row.staffKana && !targetStaff.kana) {
+          targetStaff.kana = row.staffKana;
+        }
+
+        const clockInAt = combineDateAndTime(row.workDate, row.clockIn);
+        const clockOutAt = combineDateAndTime(row.workDate, row.clockOut);
+        if (Number.isNaN(clockInAt.getTime()) || Number.isNaN(clockOutAt.getTime()) || clockOutAt <= clockInAt) {
+          return;
+        }
+
+        nextSessions.push({
+          id: row.sessionId || generateId(),
+          staffId: targetStaff.id,
+          clockInAt: clockInAt.toISOString(),
+          clockOutAt: clockOutAt.toISOString()
+        });
+      });
+
+      if (!nextSessions.length) {
+        throw new Error("取り込める勤怠データが見つかりませんでした。");
+      }
+
+      state.sessions = nextSessions;
+      saveState();
+      refreshAll();
+      window.alert("CSV勤怠データを取り込みました。");
+    }
+
+    function handleImportDataFile(event) {
+      const file = event.target.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      const isJson = file.name.toLowerCase().endsWith(".json");
+      const confirmMessage = isJson
+        ? "JSONを取り込むと登録情報と勤怠情報をまとめて置き換えます。続けますか？"
+        : "CSVを取り込むと現在の勤怠履歴をCSV内容で置き換えます。続けますか？";
+
+      if (!window.confirm(confirmMessage)) {
+        event.target.value = "";
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || "");
+          if (isJson) {
+            importBackupJson(text);
+          } else {
+            importAttendanceCsv(text);
+          }
+        } catch (error) {
+          window.alert(error instanceof Error ? error.message : "ファイルの取り込みに失敗しました。");
+        } finally {
+          event.target.value = "";
+        }
+      };
+      reader.onerror = () => {
+        event.target.value = "";
+        window.alert("ファイルの読み込みに失敗しました。");
+      };
+      reader.readAsText(file, "utf-8");
+    }
+
     function formatDateForInput(date = new Date()) {
       return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     }
@@ -1901,6 +2197,7 @@
     loadState();
     setupHourlyRateScreen();
     setupMonthlyWageCard();
+    setupDataTransferPanel();
     manualWorkDate.value = formatDateForInput();
     if (heroTitle) {
       heroTitle.textContent = "La Verte英語学院 勤怠管理";
