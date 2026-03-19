@@ -1291,7 +1291,7 @@
       refreshAll();
 
       try {
-        await saveState();
+        await saveNoticesState();
         window.alert("確認事項を保存しました。");
       } catch (error) {
         console.error("Failed to save notice:", error);
@@ -1318,7 +1318,7 @@
       refreshAll();
 
       try {
-        await saveState();
+        await saveNoticesState();
         window.alert("確認事項を削除しました。");
       } catch (error) {
         console.error("Failed to delete notice:", error);
@@ -2700,6 +2700,42 @@
     function isMissingNoticeColumnError(error) {
       const message = error?.message || error?.details || error?.hint || JSON.stringify(error || {});
       return /notices/i.test(String(message)) && /column|schema/i.test(String(message));
+    }
+
+    async function saveNoticesState() {
+      cacheStateLocally();
+      lastRemoteSnapshot = stateSnapshot(state);
+
+      if (!supabaseClient) {
+        return;
+      }
+
+      const settingsPayload = [{
+        id: ZERO_UUID,
+        hourly_rate: Number(state.hourlyRate || 0),
+        admin_password: state.adminPassword || "1000",
+        notices: state.notices || []
+      }];
+
+      const { error } = await supabaseClient
+        .from("settings")
+        .upsert(settingsPayload, { onConflict: "id" });
+
+      if (!error) {
+        return;
+      }
+
+      if (isMissingNoticeColumnError(error)) {
+        localStorage.setItem(NOTICE_STORAGE_KEY, JSON.stringify(state.notices || []));
+        return;
+      }
+
+      throw new Error(
+        error?.message
+        || error?.details
+        || error?.hint
+        || JSON.stringify(error)
+      );
     }
 
     function applyState(nextState) {
