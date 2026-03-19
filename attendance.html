@@ -2767,11 +2767,11 @@
         };
       }
 
-      const [{ data: staffRows, error: staffError }, { data: adminRows, error: adminError }, { data: sessionRows, error: sessionError }, { data: settingRows, error: settingsError }] = await Promise.all([
+      const [{ data: staffRows, error: staffError }, { data: adminRows, error: adminError }, { data: sessionRows, error: sessionError }, { data: settingRow, error: settingsError }] = await Promise.all([
         supabaseClient.from("staff").select("*").order("created_at", { ascending: true }),
         supabaseClient.from("admins").select("*").order("created_at", { ascending: true }),
         supabaseClient.from("sessions").select("*").order("clock_in_at", { ascending: true }),
-        supabaseClient.from("settings").select("*").order("created_at", { ascending: true }).limit(1)
+        supabaseClient.from("settings").select("*").eq("id", ZERO_UUID).maybeSingle()
       ]);
 
       if (staffError || adminError || sessionError || settingsError) {
@@ -2794,9 +2794,9 @@
           phone: row.phone || "",
           email: row.email || ""
         })),
-        adminPassword: String(settingRows?.[0]?.admin_password || state.adminPassword || "1000"),
-        hourlyRate: Number(settingRows?.[0]?.hourly_rate || 0),
-        notices: Array.isArray(settingRows?.[0]?.notices) ? settingRows[0].notices : loadLocalNotices(),
+        adminPassword: String(settingRow?.admin_password || state.adminPassword || "1000"),
+        hourlyRate: Number(settingRow?.hourly_rate || 0),
+        notices: Array.isArray(settingRow?.notices) ? settingRow.notices : loadLocalNotices(),
         sessions: (sessionRows || []).map((row) => ({
           id: row.id,
           staffId: row.staff_id,
