@@ -3213,9 +3213,14 @@
     }
 
     function resetStaffSelection() {
+      const staffNoticePanel = document.getElementById("staffNoticePanel");
       if (staffSelect) {
         staffSelect.value = "";
       }
+      if (staffNoticePanel) {
+        staffNoticePanel.style.display = "";
+      }
+      renderStaffNotices();
       renderStaffPanel();
       updateLiveClock();
     }
