@@ -3390,6 +3390,238 @@
       });
     };
 
+    let adminSelectedMonthKey = "";
+
+    function buildAdminMonthKey(year, monthIndex) {
+      return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+    }
+
+    function getAdminMonthOptions() {
+      return Array.from({ length: 3 }, (_, offset) => {
+        const date = new Date();
+        date.setDate(1);
+        date.setMonth(date.getMonth() - offset);
+        return {
+          key: buildAdminMonthKey(date.getFullYear(), date.getMonth()),
+          year: date.getFullYear(),
+          monthIndex: date.getMonth(),
+          label: `${date.getFullYear()}年${date.getMonth() + 1}月`
+        };
+      });
+    }
+
+    function getSelectedAdminMonth() {
+      const options = getAdminMonthOptions();
+      if (!adminSelectedMonthKey || !options.some((option) => option.key === adminSelectedMonthKey)) {
+        adminSelectedMonthKey = options[0]?.key || "";
+      }
+      return options.find((option) => option.key === adminSelectedMonthKey) || options[0];
+    }
+
+    const AUTO_CLOCK_OUT_HOUR = 20;
+    const AUTO_CLOCK_OUT_MINUTE = 30;
+    let autoClockOutInFlight = false;
+
+    function buildAutoClockOutTime(session) {
+      const clockIn = new Date(session.clockInAt);
+      if (Number.isNaN(clockIn.getTime())) return null;
+      const cutoff = new Date(clockIn);
+      cutoff.setHours(AUTO_CLOCK_OUT_HOUR, AUTO_CLOCK_OUT_MINUTE, 0, 0);
+      return cutoff;
+    }
+
+    function findSessionsNeedingAutoClockOut(referenceTime = new Date()) {
+      return state.sessions.filter((session) => {
+        if (session.clockOutAt) return false;
+        const cutoff = buildAutoClockOutTime(session);
+        if (!cutoff) return false;
+        return referenceTime.getTime() >= cutoff.getTime();
+      });
+    }
+
+    async function enforceAutoClockOut(referenceTime = new Date()) {
+      if (autoClockOutInFlight) return;
+
+      const targets = findSessionsNeedingAutoClockOut(referenceTime);
+      if (!targets.length) return;
+
+      autoClockOutInFlight = true;
+      try {
+        targets.forEach((session) => {
+          const cutoff = buildAutoClockOutTime(session);
+          if (!cutoff) return;
+          session.clockOutAt = cutoff.toISOString();
+        });
+        await saveState();
+        refreshAll();
+      } catch (error) {
+        console.error("Failed to auto clock out sessions:", error);
+      } finally {
+        autoClockOutInFlight = false;
+      }
+    }
+
+    function ensureAdminMonthSelector() {
+      const primaryPanel = adminScreen.querySelector(".panel");
+      if (!primaryPanel) return null;
+
+      let wrapper = document.getElementById("adminMonthSelectorWrap");
+      if (!wrapper) {
+        wrapper = document.createElement("div");
+        wrapper.id = "adminMonthSelectorWrap";
+        wrapper.className = "field";
+        wrapper.style.maxWidth = "280px";
+        wrapper.style.marginTop = "16px";
+        wrapper.innerHTML = `
+          <label for="adminMonthSelect">表示月</label>
+          <select id="adminMonthSelect"></select>
+        `;
+        const title = primaryPanel.querySelector("h2");
+        if (title) {
+          title.insertAdjacentElement("afterend", wrapper);
+        } else {
+          primaryPanel.prepend(wrapper);
+        }
+      }
+
+      const select = document.getElementById("adminMonthSelect");
+      if (!select) return null;
+
+      const options = getAdminMonthOptions();
+      const previousValue = adminSelectedMonthKey || select.value;
+      select.innerHTML = "";
+      options.forEach((option) => {
+        const element = document.createElement("option");
+        element.value = option.key;
+        element.textContent = option.label;
+        select.appendChild(element);
+      });
+
+      adminSelectedMonthKey = options.some((option) => option.key === previousValue)
+        ? previousValue
+        : options[0]?.key || "";
+      select.value = adminSelectedMonthKey;
+
+      if (!select.dataset.bound) {
+        select.addEventListener("change", () => {
+          adminSelectedMonthKey = select.value;
+          renderAdminSummary();
+        });
+        select.dataset.bound = "true";
+      }
+
+      return select;
+    }
+
+    updateMonthlyWageCard = function updateMonthlyWageCardSelectedMonth() {
+      setupMonthlyWageCard();
+      const label = document.getElementById("monthlyWageLabel");
+      const value = document.getElementById("monthlyTotalWage");
+      if (!label || !value) return;
+
+      const selectedMonth = getSelectedAdminMonth();
+      let totalMonthlyWage = 0;
+
+      state.staff.forEach((member) => {
+        const totalMs = totalHoursForStaffInMonth(member.id, selectedMonth.year, selectedMonth.monthIndex);
+        const roundedHours = Number((totalMs / 3600000).toFixed(1));
+        totalMonthlyWage += Math.round(roundedHours * state.hourlyRate);
+      });
+
+      label.textContent = `${selectedMonth.monthIndex + 1}月のアルバイト料総額`;
+      value.textContent = formatCurrency(totalMonthlyWage);
+    };
+
+    renderAdminSummary = function renderAdminSummaryFinalRecentMonths() {
+      ensureAdminMonthSelector();
+      const selectedMonth = getSelectedAdminMonth();
+      updateMonthlyWageCard();
+
+      const cards = adminScreen.querySelector(".cards");
+      const headerRow = adminSummaryBody.closest("table").querySelector("thead tr");
+      const adminCards = cards ? adminScreen.querySelectorAll(".cards .card") : [];
+      const totalHoursLabel = adminCards[1]?.querySelector(".card-label");
+      const monthlyWageLabel = document.getElementById("monthlyWageLabel");
+
+      if (headerRow) {
+        headerRow.innerHTML = `
+          <th>氏名</th>
+          <th>累計勤務時間</th>
+          <th>アルバイト料</th>
+          <th>現在の状態</th>
+        `;
+      }
+
+      adminSummaryBody.innerHTML = "";
+
+      if (adminScreenTitle) {
+        adminScreenTitle.textContent = `${selectedMonth.monthIndex + 1}月の勤務時間一覧`;
+      }
+      if (totalHoursLabel) {
+        totalHoursLabel.textContent = "スタッフ全体の総勤務時間";
+      }
+      if (monthlyWageLabel) {
+        monthlyWageLabel.textContent = `${selectedMonth.monthIndex + 1}月のアルバイト料総額`;
+      }
+      adminSummaryTitle.textContent = `${selectedMonth.monthIndex + 1}月のスタッフ別の累計勤務時間`;
+
+      let grandTotal = 0;
+      let workingCount = 0;
+
+      if (!state.staff.length) {
+        adminSummaryBody.innerHTML = '<tr><td colspan="4" class="muted">まだスタッフが登録されていません。</td></tr>';
+      } else {
+        state.staff.forEach((member) => {
+          const totalMs = totalHoursForStaffInMonth(member.id, selectedMonth.year, selectedMonth.monthIndex);
+          const roundedHours = Number((totalMs / 3600000).toFixed(1));
+          const wage = Math.round(roundedHours * state.hourlyRate);
+          const active = activeSessionForStaff(member.id);
+          grandTotal += totalMs;
+          if (active) workingCount += 1;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><button class="text-button" type="button" data-staff-detail="${member.id}">${member.name}</button></td>
+            <td>${roundedHours.toFixed(1)}時間</td>
+            <td>${formatCurrency(wage)}</td>
+            <td>${active ? "出勤中" : "退勤中"}</td>
+          `;
+          adminSummaryBody.appendChild(tr);
+        });
+      }
+
+      totalStaffCount.textContent = String(state.staff.length);
+      grandTotalHours.textContent = `${(grandTotal / 3600000).toFixed(1)}時間`;
+      workingNowCount.textContent = String(workingCount);
+
+      const hourlyRateField = getHourlyRateInputElement();
+      if (hourlyRateField && document.activeElement !== hourlyRateField) {
+        hourlyRateField.value = String(state.hourlyRate || 0);
+      }
+    };
+
+    adminSummaryBody.addEventListener(
+      "click",
+      (event) => {
+        const button = event.target.closest("[data-staff-detail]");
+        if (!button) return;
+        const selectedMonth = getSelectedAdminMonth();
+        event.stopImmediatePropagation();
+        openAdminStaffDetail(button.dataset.staffDetail, selectedMonth.year, selectedMonth.monthIndex);
+      },
+      true
+    );
+
+    document.getElementById("backToAdminSummaryBtn").addEventListener(
+      "click",
+      (event) => {
+        event.stopImmediatePropagation();
+        showScreen(adminScreen);
+        renderAdminSummary();
+      },
+      true
+    );
+
     renderAdminSummary();
     initializeSupabaseSync();
     window.setInterval(syncFromSupabaseSilently, 5000);
@@ -3405,6 +3637,11 @@
       renderAdminSummary();
       updateMonthlyWageCard();
     }, 1000);
+
+    enforceAutoClockOut();
+    window.setInterval(() => {
+      enforceAutoClockOut();
+    }, 30000);
   </script>
 </body>
 </html>
